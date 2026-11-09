@@ -4,6 +4,7 @@
 //   npm run dev              dist/, not minified, with source maps (open dist/index.html in Chrome)
 //   npm run wgt              + build/glint.wgt (unsigned; apps2samsung-cli signs it on install)
 //   GLINT_TV=<tv ip> npm run tv   + sign, install and launch on the TV with apps2samsung-cli
+//   GLINT_SELFTEST=<url> …        builds in the self-test (src/selftest.js): drives the remote and POSTs frame times
 //
 // The target is chrome56: Samsung TVs of 2018 (Tizen 4.0) run Chromium M56. esbuild lowers newer syntax
 // (object spread, optional chaining, …) and refuses what it cannot lower — that is the point.
@@ -26,7 +27,8 @@ await build({
   minify: !dev,
   sourcemap: dev ? 'inline' : false,
   outfile: 'dist/app.js',
-  define: { GLINT_VERSION: JSON.stringify(pkg.version) },
+  // GLINT_SELFTEST=<report url> builds in src/selftest.js (drives the remote, POSTs frame times there)
+  define: { GLINT_VERSION: JSON.stringify(pkg.version), GLINT_SELFTEST: JSON.stringify(process.env.GLINT_SELFTEST || '') },
   logLevel: 'info',
 });
 
@@ -46,5 +48,8 @@ if (args.has('--install')) {
   const tv = process.env.GLINT_TV;
   if (!tv) { console.error('GLINT_TV=<TV ip> is required'); process.exit(2); }
   if (!existsSync('build/glint.wgt')) { console.error('build/glint.wgt is missing'); process.exit(1); }
-  execFileSync('apps2samsung-cli', ['install', 'build/glint.wgt', '--tv', tv, '--launch'], { stdio: 'inherit' });
+  // --json -q and no stdin: run from a script, the CLI must never sit waiting for an answer in the terminal
+  // (2026-11-09: without them `npm run tv` hung for 5 minutes with no output).
+  execFileSync('apps2samsung-cli', ['install', 'build/glint.wgt', '--tv', tv, '--launch', '--json', '-q'],
+    { stdio: ['ignore', 'inherit', 'inherit'], timeout: 180000 });
 }

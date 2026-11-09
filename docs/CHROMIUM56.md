@@ -37,6 +37,21 @@ about 16 times and stretched back — the browser blurs it for free.
 
 Rule: animate only `transform` and `opacity`, never `box-shadow`; size pictures to where they are shown.
 
+### Glint itself (skeleton `0.0.1`, self-test build, 2026-11-09)
+
+`GLINT_SELFTEST=<report url> GLINT_TV=<ip> npm run tv` — the app drives the remote by itself and reports:
+
+| What | fps | p95 frame | frames > 34 ms |
+|---|---|---|---|
+| Idle | 59.5 | 17 ms | 0 |
+| Hero: next title ×4 | 59.2 | 31 ms | 7 |
+| Row: right ×10 (every 250 ms) | **44.1** | 72 ms | 14 |
+| Row 1 → row 2 (page scroll, background change) | 49.5 | 41 ms | 10 |
+| Back to the menu, switching sections ×3 | 59.2 | 32 ms | 8 |
+
+JS heap 10 MB. The row is the weak spot (the probe's bare row did 48.7): next suspects are the caption
+moving with the card and the track's own transition running at the same time as the card's.
+
 ## JavaScript
 
 The build targets `chrome56` with esbuild: newer syntax is lowered, and what cannot be lowered fails the build.

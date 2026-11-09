@@ -3,6 +3,7 @@ import { KEY, registerMediaKeys, exitApp, fit } from './platform.js';
 import { createSection } from './screens/section.js';
 import { register } from './ext/registry.js';
 import { esc, $, $$ } from './ui/util.js';
+import { selftest } from './selftest.js';
 
 /* global GLINT_VERSION */
 window.Glint = { version: GLINT_VERSION, register };
@@ -78,18 +79,25 @@ function openSection(i) {
   focus.set([menuZone].concat(section.zones), focus.zone() || 'hero');
 }
 
-document.addEventListener('keydown', (e) => {
-  const a = KEY[e.keyCode];
-  if (!a) return;
-  e.preventDefault();
+function press(a) {
   if (a === 'enter') focus.enter();
   else if (a === 'back') {
     if (focus.zone() !== 'menu') focus.focus('menu', current);
     else exitApp();
   } else focus.move(a);
+}
+
+document.addEventListener('keydown', (e) => {
+  const a = KEY[e.keyCode];
+  if (!a) return;
+  e.preventDefault();
+  press(a);
 });
 
 registerMediaKeys();
 fit(tv);
 window.addEventListener('resize', () => fit(tv));
 openSection(0);
+
+/* global GLINT_SELFTEST */
+if (GLINT_SELFTEST) selftest(GLINT_SELFTEST, press);
