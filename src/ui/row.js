@@ -8,7 +8,7 @@ import { esc, cssUrl } from './util.js';
 // dark placeholder once it has arrived: loading a whole row at once on the TV stalled the scroll and
 // pictures popped in half-drawn.
 
-const STEP = { wide: 440, poster: 288, channel: 440 };   // card width + 40 gap; channel = a wide card with a logo
+const STEP = { wide: 440, poster: 288, channel: 440, square: 300 };   // card width + 40 gap; channel = a wide card with a logo
 const AHEAD = 3;                           // cards loaded past the visible ones
 
 function sub(it) {
@@ -16,7 +16,7 @@ function sub(it) {
   return [it.year, it.genre].filter(Boolean).join(' · ');
 }
 
-export function styleOf(row) { return row.style === 'poster' || row.style === 'channel' ? row.style : 'wide'; }
+export function styleOf(row) { return STEP[row.style] ? row.style : 'wide'; }
 export function visibleCount(style) { return Math.floor((1920 - 120 + 40) / STEP[style]); }
 
 export function rowHTML(id, row) {

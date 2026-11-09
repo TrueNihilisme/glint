@@ -184,7 +184,11 @@ function entryData(m) {
   const item = m.items[sub[m.key] || 0] || m.items[0];
   const e = item.ext;
   if (typeof e.page !== 'function') return Promise.resolve({ rows: [], note: 'Розширення не дало сторінки' });
-  return Promise.resolve().then(() => e.page(m.id, item.id, contextFor(e))).then((p) => ({
+  return Promise.resolve().then(() => e.page(m.id, item.id, contextFor(e))).then((p) => {
+    // remember which extension a card came from: Enter on it may need that extension's open()
+    ((p && p.rows) || []).forEach((r) => (r.items || []).forEach((it) => { if (!it._ext) it._ext = e; }));
+    return p;
+  }).then((p) => ({
     hero: (p && p.hero) || [],
     rows: ((p && p.rows) || []).filter((r) => r && r.items && r.items.length),
     note: p && p.rows && p.rows.length ? p.note : (p && p.note) || 'Тут поки порожньо',
@@ -230,6 +234,16 @@ let beforeTitle = null;
 function openTitle(it) {
   if (it.stream) {
     player.play({ url: it.stream, title: it.title, sub: it.meta || '' });
+    return;
+  }
+  // a card an extension opens itself (an album → a queue of tracks)
+  if (!it.tmdb && it._ext && typeof it._ext.open === 'function') {
+    toast('Відкриваю «' + it.title + '»…');
+    Promise.resolve().then(() => it._ext.open(it, contextFor(it._ext))).then((r) => {
+      if (r && r.queue && r.queue.length) player.play({ queue: r.queue, index: r.index || 0 });
+      else if (r && r.stream) player.play({ url: r.stream, title: it.title, sub: it.meta || '' });
+      else toast('Тут нема що відтворювати');
+    }).catch((err) => { problem((it._ext.name || it._ext.id) + ' open: ' + (err && err.message || err)); toast(String(err && err.message || err)); });
     return;
   }
   beforeTitle = focus.zone();
