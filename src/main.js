@@ -13,7 +13,7 @@ import { selftest } from './selftest.js';
 /* global GLINT_VERSION, GLINT_PRESET, GLINT_SELFTEST, GLINT_SELFTEST_MODE */
 window.Glint = { version: GLINT_VERSION, register, debug: () => debugInfo() };
 
-// Core sections. TV and Music are not here on purpose: they come with extensions.
+// Core sections. TV, Music and the like are not here on purpose: they come with extensions (see extMenus).
 const SECTIONS = [
   { id: 'movies', title: 'Фільми' },
   { id: 'series', title: 'Серіали' },
@@ -27,40 +27,38 @@ const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const tv = document.getElementById('tv');
 tv.innerHTML =
   '<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div><div class="shade"></div><div class="dim"></div>' +
-  '<div id="section"></div><div class="topshade"></div><nav class="menu"></nav>' +
+  '<div id="section"></div><div class="topshade"></div><nav class="menu"></nav><div class="drop"></div>' +
   '<div id="title"></div><div id="settings"></div><div class="toast"><span></span></div>';
 
 // Background: two layers that cross-fade. After the fade the hidden one gets visibility:hidden —
 // a full-screen layer at opacity 0 is still composited every frame, and on a Tizen 4 TV that alone
 // took a row of cards from ~56 to ~42 fps (self-test A/B, 2026-11-09).
+// A new background is applied only once the focus has rested for 300 ms: decoding a photo on every
+// key press while walking a row took it down to ~8 fps on the TV with real TMDB backdrops.
 const bg = (() => {
   let front = $('#bgA');
   let back = $('#bgB');
   let cur = '';
   let timer = 0;
   let wait = 0;
-  // A new background is applied only once the focus has rested for 300 ms: decoding a photo on every
-  // key press while walking a row took it down to ~8 fps on the TV with real TMDB backdrops.
+  function apply(url) {
+    cur = url;
+    clearTimeout(timer);
+    back.style.backgroundImage = 'url("' + String(url).replace(/["\\]/g, '') + '")';
+    back.style.visibility = 'visible';
+    back.classList.add('on');
+    front.classList.remove('on');
+    const t = front; front = back; back = t;
+    const old = back;
+    timer = setTimeout(() => { old.style.visibility = 'hidden'; }, 750);
+  }
   return {
     set(url) {
-      if (!url || url === cur) { clearTimeout(wait); return; }
       clearTimeout(wait);
+      if (!url || url === cur) return;
       wait = setTimeout(() => apply(url), cur ? 300 : 0);
     },
   };
-  function apply(url) {
-    {
-      cur = url;
-      clearTimeout(timer);
-      back.style.backgroundImage = 'url("' + String(url).replace(/["\\]/g, '') + '")';
-      back.style.visibility = 'visible';
-      back.classList.add('on');
-      front.classList.remove('on');
-      const t = front; front = back; back = t;
-      const old = back;
-      timer = setTimeout(() => { old.style.visibility = 'hidden'; }, 750);
-    }
-  }
 })();
 
 let toastTimer = 0;
@@ -76,35 +74,90 @@ setToast(toast);
 const focus = createFocus();
 const player = createPlayer(tv);
 
-// ── menu ──
-function visibleSections() {
-  const h = load('menu.hidden', []);
-  return SECTIONS.filter((s) => h.indexOf(s.id) < 0);
+// ── menu: core sections + menus from extensions ──
+//
+// Extension API: menu: [{ id, title, items: [{ id, title }] }] and page(menuId, itemId, ctx) → Promise<{ rows, hero? }>.
+// Menus with the same id from several extensions merge (TV from an IPTV extension and from another one).
+// A menu with more than one item shows a drop-down under its tab.
+function extMenus() {
+  const byId = {};
+  const out = [];
+  extensions().forEach((e) => (e.menu || []).forEach((m) => {
+    let entry = byId[m.id];
+    if (!entry) { entry = byId[m.id] = { key: 'ext:' + m.id, id: m.id, title: m.title, items: [] }; out.push(entry); }
+    (m.items && m.items.length ? m.items : [{ id: m.id, title: m.title }]).forEach((it) => entry.items.push({ id: it.id, title: it.title, ext: e }));
+  }));
+  return out;
 }
-let current = null;   // section id
+function allEntries() {
+  return SECTIONS.map((s) => ({ key: s.id, id: s.id, title: s.title, section: true })).concat(extMenus());
+}
+function menuEntries() {
+  const h = load('menu.hidden', []);
+  return allEntries().filter((m) => h.indexOf(m.key) < 0);
+}
+
+let current = null;         // key of the open entry
+const sub = {};             // entry key → chosen item index
 function drawMenu() {
-  const vis = visibleSections();
   $('.menu').innerHTML = '<div class="pill">' +
-    vis.map((s) => '<span class="tab' + (s.id === current ? ' sel' : '') + '">' + esc(s.title) + '</span>').join('') +
+    menuEntries().map((m) => '<span class="tab' + (m.key === current ? ' sel' : '') + '">' + esc(m.title) +
+      (m.items && m.items.length > 1 ? '<span class="chev">▾</span>' : '') + '</span>').join('') +
     '<span class="tab icon" aria-label="Налаштування">' + GEAR + '</span></div>';
 }
+
 const menuZone = {
   id: 'menu',
   dir: 'h',
   items: () => $$('.menu .tab'),
   // sections open only after the extensions have loaded — earlier the first one was built from demo
   // data (no extension yet) and stayed that way
-  onFocus: (i) => { const vis = visibleSections(); if (ready && i < vis.length) openSection(vis[i].id); },
+  onFocus: (i) => { const m = menuEntries()[i]; if (ready && m) openEntry(m.key); },
   onEnter: (i) => {
-    if (i >= visibleSections().length) openSettings();
-    else if (sectionZones[0]) focus.focus(sectionZones[0].id);
+    const m = menuEntries()[i];
+    if (!m) { openSettings(); return; }
+    if (m.items && m.items.length > 1) focus.focus('drop', sub[m.key] || 0);
+    else if (pageZones[0]) focus.focus(pageZones[0].id);
   },
 };
 
-// ── sections: rows from extensions, demo rows when there are none ──
+// drop-down under a tab: the items of an extension menu
+const dropZone = {
+  id: 'drop',
+  dir: 'v',
+  items: () => ($('.drop').classList.contains('on') ? $$('.drop .ditem') : []),   // hidden drop-down: no zone
+  onEdge: (step) => { if (step < 0) focus.focus('menu', menuEntries().findIndex((m) => m.key === current)); },
+  onEnter: (i) => {
+    const m = menuEntries().find((x) => x.key === current);
+    if (!m) return;
+    sub[m.key] = i;
+    current = null;
+    openEntry(m.key, true);
+  },
+};
+function updateDrop() {
+  const box = $('.drop');
+  const zone = focus.zone();
+  const entries = menuEntries();
+  const i = zone === 'menu' ? focus.index('menu') : entries.findIndex((m) => m.key === current);
+  const m = entries[i];
+  const show = !!(m && m.items && m.items.length > 1 && (zone === 'menu' || zone === 'drop'));
+  if (!show) { box.classList.remove('on'); return; }
+  const tab = $$('.menu .tab')[i];
+  const pill = $('.menu .pill');
+  box.style.left = (pill.offsetLeft + tab.offsetLeft - 6) + 'px';
+  const html = m.items.map((it, k) => '<div class="ditem' + (k === (sub[m.key] || 0) && m.key === current ? ' cur' : '') + '">' + esc(it.title) + '</div>').join('');
+  if (box.getAttribute('data-for') !== m.key || box.innerHTML !== html) {
+    box.setAttribute('data-for', m.key);
+    box.innerHTML = html;
+    if (zone === 'drop') focus.refresh();
+  }
+  box.classList.add('on');
+}
+
+// ── pages: sections (rows from all extensions) and extension menu items (rows from that extension) ──
 const cache = {};
 function sectionData(id) {
-  if (cache[id]) return Promise.resolve(cache[id]);
   const withRows = extensions().filter((e) => typeof e.rows === 'function');
   return Promise.all(withRows.map((e) =>
     Promise.resolve().then(() => e.rows(id, contextFor(e))).catch((err) => {
@@ -119,48 +172,66 @@ function sectionData(id) {
     const rank = (r) => (typeof r.order === 'number' ? r.order : r.style === 'poster' ? 10 : r.style === 'wide' ? 20 : 50);
     const rows = [].concat.apply([], lists).filter((r) => r && r.items && r.items.length)
       .map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map((x) => x.r);
-    let data;
-    if (!rows.length) data = demoSection(id);
-    else {
-      const seen = {};
-      const hero = [];
-      rows.forEach((r) => r.items.forEach((it) => { if (hero.length < 5 && it.backdrop && !seen[it.id]) { seen[it.id] = 1; hero.push(it); } }));
-      data = { hero, rows };
-    }
-    if (!data.demo) cache[id] = data;   // demo is never cached: real rows may still arrive
-    return data;
+    if (!rows.length) return demoSection(id);
+    const seen = {};
+    const hero = [];
+    rows.forEach((r) => r.items.forEach((it) => { if (hero.length < 5 && it.backdrop && !seen[it.id]) { seen[it.id] = 1; hero.push(it); } }));
+    return { hero, rows };
+  });
+}
+function entryData(m) {
+  if (m.section) return sectionData(m.id);
+  const item = m.items[sub[m.key] || 0] || m.items[0];
+  const e = item.ext;
+  if (typeof e.page !== 'function') return Promise.resolve({ rows: [], note: 'Розширення не дало сторінки' });
+  return Promise.resolve().then(() => e.page(m.id, item.id, contextFor(e))).then((p) => ({
+    hero: (p && p.hero) || [],
+    rows: ((p && p.rows) || []).filter((r) => r && r.items && r.items.length),
+    note: p && p.rows && p.rows.length ? p.note : (p && p.note) || 'Тут поки порожньо',
+  })).catch((err) => {
+    problem((e.name || e.id) + ' page: ' + (err && err.message || err));
+    return { rows: [], note: (e.name || e.id) + ': ' + (err && err.message || err) };
   });
 }
 
-let sectionZones = [];
+let pageZones = [];
 let ticket = 0;
-function openSection(id) {
-  if (id === current) return;
-  current = id;
+function openEntry(key, focusContent) {
+  if (key === current) return;
+  const m = menuEntries().find((x) => x.key === key);
+  if (!m) return;
+  current = key;
   drawMenu();
+  const cacheKey = key + '#' + (sub[key] || 0);
   const t = ++ticket;
-  sectionData(id).then((data) => {
-    if (t !== ticket) return;   // another section was chosen meanwhile
+  (cache[cacheKey] ? Promise.resolve(cache[cacheKey]) : entryData(m)).then((data) => {
+    if (t !== ticket) return;   // another page was chosen meanwhile
+    if (!data.demo && data.rows.length) cache[cacheKey] = data;   // demo / empty is never cached
     const s = createSection($('#section'), data, {
       focus, bg, toast,
       onDeep: (deep) => tv.classList.toggle('deep', deep),
       openTitle,
     });
-    sectionZones = s.zones;
-    if (settingsOpen) return;
-    // the very first section opens with the focus on its content, later ones keep it on the menu
-    const start = firstOpen && sectionZones[0] ? sectionZones[0].id : focus.zone() || 'menu';
+    pageZones = s.zones;
+    if (settingsOpen || titleOpen) return;
+    // the very first page opens with the focus on its content, later ones keep it where it is
+    const start = (firstOpen || focusContent) && pageZones[0] ? pageZones[0].id : focus.zone() || 'menu';
     firstOpen = false;
-    focus.set([menuZone].concat(sectionZones), start);
+    focus.set([menuZone, dropZone].concat(pageZones), start);
+    updateDrop();
   });
 }
 let firstOpen = true;
 let ready = false;
 
-// ── title page ──
+// ── title page; a card with a stream (a TV channel) plays at once ──
 let titleOpen = false;
 let beforeTitle = null;
 function openTitle(it) {
+  if (it.stream) {
+    player.play({ url: it.stream, title: it.title, sub: it.meta || '' });
+    return;
+  }
   beforeTitle = focus.zone();
   titleOpen = true;
   tv.classList.add('ov');
@@ -175,36 +246,36 @@ function closeTitle() {
   const root = $('#title');
   root.classList.remove('on');
   root.innerHTML = '';
-  focus.set([menuZone].concat(sectionZones), beforeTitle || 'menu');
+  focus.set([menuZone, dropZone].concat(pageZones), beforeTitle || 'menu');
 }
 
 // ── settings ──
 let settingsOpen = false;
 const settings = createSettings($('#settings'), {
-  focus, toast, sections: SECTIONS, version: GLINT_VERSION,
-  close: () => { settingsOpen = false; focus.set([menuZone].concat(sectionZones), 'menu'); },
+  focus, toast, version: GLINT_VERSION,
+  entries: () => allEntries().map((m) => ({ id: m.key, title: m.title })),
+  close: () => { settingsOpen = false; focus.set([menuZone, dropZone].concat(pageZones), 'menu'); updateDrop(); },
   reload: () => setTimeout(() => location.reload(), 700),
   menuChanged: () => {
-    const vis = visibleSections();
-    if (!vis.some((s) => s.id === current)) { current = null; openSection(vis[0].id); }
+    const vis = menuEntries();
     drawMenu();
+    if (!vis.some((m) => m.key === current) && vis[0]) { current = null; openEntry(vis[0].key); }
   },
 });
-function openSettings() { settingsOpen = true; settings.open(); }
+function openSettings() { settingsOpen = true; $('.drop').classList.remove('on'); settings.open(); }
 
 // ── keys ──
 function press(a) {
   if (player.open) { player.key(a); return; }
   if (a === 'playpause') return;
-  if (a === 'enter') { focus.enter(); return; }
-  if (a === 'back') {
-    if (settingsOpen) { settings.back(); return; }
-    if (titleOpen) { closeTitle(); return; }
-    if (focus.zone() !== 'menu') { focus.focus('menu', visibleSections().findIndex((s) => s.id === current)); return; }
-    exitApp();
-    return;
-  }
-  focus.move(a);
+  if (a === 'enter') focus.enter();
+  else if (a === 'back') {
+    if (settingsOpen) settings.back();
+    else if (titleOpen) closeTitle();
+    else if (focus.zone() !== 'menu') focus.focus('menu', menuEntries().findIndex((m) => m.key === current));
+    else exitApp();
+  } else focus.move(a);
+  if (!settingsOpen && !titleOpen) updateDrop();
 }
 document.addEventListener('keydown', (e) => {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;   // the prompt handles its own keys
@@ -223,6 +294,8 @@ drawMenu();
 focus.set([menuZone], 'menu');
 loadExtensions().then(() => {
   ready = true;
-  openSection(visibleSections()[0].id);
+  drawMenu();
+  const first = menuEntries()[0];
+  if (first) openEntry(first.key);
   if (GLINT_SELFTEST) setTimeout(() => selftest(GLINT_SELFTEST, press, GLINT_SELFTEST_MODE), 1500);
 });

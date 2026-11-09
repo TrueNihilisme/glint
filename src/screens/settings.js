@@ -6,7 +6,7 @@ import { esc, $, $$ } from '../ui/util.js';
 // Settings: the core's own pages on the left (Extensions, Menu, About), the chosen page on the right.
 // Each extension has its own page with the fields it declared, opened from the Extensions list.
 //
-// deps: { focus, toast, sections, version, close(), reload(), menuChanged() }
+// deps: { focus, toast, entries(), version, close(), reload(), menuChanged() }
 
 const NAV = [
   { id: 'ext', title: 'Розширення' },
@@ -35,14 +35,15 @@ export function createSettings(root, deps) {
       return out;
     }
     if (page === 'menu') {
-      return deps.sections.map((s) => ({
+      const all = deps.entries();   // core sections and menus from extensions: { id, title }
+      return all.map((s) => ({
         label: s.title,
         sw: hidden().indexOf(s.id) < 0,
         run: () => {
           const h = hidden();
           const k = h.indexOf(s.id);
           if (k >= 0) h.splice(k, 1);
-          else if (deps.sections.length - h.length <= 1) { deps.toast('Хоча б один розділ має лишитися в меню'); return; }
+          else if (all.filter((x) => h.indexOf(x.id) < 0).length <= 1) { deps.toast('Хоча б один пункт має лишитися в меню'); return; }
           else h.push(s.id);
           save('menu.hidden', h);
           deps.menuChanged();
