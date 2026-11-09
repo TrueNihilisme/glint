@@ -66,7 +66,33 @@ async function rowAB(press, send) {
   }
 }
 
-export async function selftest(url, press) {
+// GLINT_SELFTEST_MODE=play: open the first hero title, press Play, report what the player shows, go back.
+async function playFlow(press, send) {
+  const pick = () => ({
+    title: (document.querySelector('#title h1') || {}).textContent || null,
+    source: (document.querySelector('#title [data-zone="tsrc"] .chip') || {}).textContent || null,
+    playing: document.body.classList.contains('playing'),
+    msg: (document.querySelector('.p-msg') || {}).textContent || '',
+    time: (document.querySelector('.p-time') || {}).textContent || '',
+    sub: (document.querySelector('.p-sub') || {}).textContent || '',
+    toast: (document.querySelector('.toast.on span') || {}).textContent || '',
+    avObject: !!document.querySelector('.p-av'),
+  });
+  press('enter');                       // hero → title page
+  for (let i = 0; i < 20 && !/Джерело:/.test(pick().source || ''); i++) await wait(1000);
+  send('play: title page', pick());
+  press('enter');                       // Play
+  await wait(4000);
+  send('play: +4 s', pick());
+  await wait(8000);
+  send('play: +12 s', pick());
+  press('back');
+  await wait(1500);
+  press('back');
+  send('play: back', pick());
+}
+
+export async function selftest(url, press, mode) {
   const send = (step, res) => {
     try {
       const x = new XMLHttpRequest();
@@ -85,6 +111,7 @@ export async function selftest(url, press) {
     ext: window.Glint && window.Glint.debug ? window.Glint.debug() : null,
   });
   await wait(4000);   // right after install/launch the TV is busy: numbers taken earlier were noise
+  if (mode === 'play') { await playFlow(press, send); send('done', { mem: mem() }); return; }
   send('idle', await measure(2000));
   send('hero: next title ×4', await run(press, ['right', 'right', 'right', 'right'], 500, 2500));
   press('down');

@@ -10,7 +10,7 @@ import { demoSection } from './data/stub.js';
 import { esc, $, $$ } from './ui/util.js';
 import { selftest } from './selftest.js';
 
-/* global GLINT_VERSION, GLINT_PRESET, GLINT_SELFTEST */
+/* global GLINT_VERSION, GLINT_PRESET, GLINT_SELFTEST, GLINT_SELFTEST_MODE */
 window.Glint = { version: GLINT_VERSION, register, debug: () => debugInfo() };
 
 // Core sections. TV and Music are not here on purpose: they come with extensions.
@@ -224,5 +224,5 @@ focus.set([menuZone], 'menu');
 loadExtensions().then(() => {
   ready = true;
   openSection(visibleSections()[0].id);
-  if (GLINT_SELFTEST) setTimeout(() => selftest(GLINT_SELFTEST, press), 1500);
+  if (GLINT_SELFTEST) setTimeout(() => selftest(GLINT_SELFTEST, press, GLINT_SELFTEST_MODE), 1500);
 });

@@ -9,7 +9,7 @@ import { load, save } from '../store.js';
 //   rows(section, ctx) → Promise<[{ title, style: 'poster'|'wide', ai?, items: [Item] }]>
 //                         section: 'movies' | 'series' | 'cartoons' | 'anime'
 //   Item: { id, title, card, backdrop, year?, genre?, meta?, desc?, tmdb?: { id, type } }
-// ctx: { get(key), set(key, value), getJSON(url, ms?), toast(text) }
+// ctx: { get(key), set(key, value), getJSON(url, ms?), request(method, url, body?, headers?, ms?), toast(text) }
 //
 // An extension is someone else's code inside the app — the settings page shows its address, and it
 // runs only while it is switched on. Extension files must run on Chromium 56 as they are (ES5 is safest).
@@ -89,6 +89,21 @@ export function getJSON(url, ms) {
   });
 }
 
+// Any HTTP request from an extension: { status, text }. In the widget there is no CORS, so other sites answer;
+// headers a browser forbids to set (User-Agent, Referer, Cookie…) are skipped quietly.
+export function request(method, url, body, headers, ms) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open(method || 'GET', url, true);
+    x.timeout = ms || 15000;
+    Object.keys(headers || {}).forEach((h) => { try { x.setRequestHeader(h, headers[h]); } catch (e) { /* forbidden header */ } });
+    x.onload = () => resolve({ status: x.status, text: x.responseText || '' });
+    x.onerror = () => reject(new Error('network'));
+    x.ontimeout = () => reject(new Error('timeout'));
+    x.send(body == null ? null : body);
+  });
+}
+
 export function settingValue(ext, key) {
   const v = load('ext.' + ext.id, {})[key];
   if (v != null) return v;
@@ -107,6 +122,7 @@ export function contextFor(ext) {
     get: (key) => settingValue(ext, key),
     set: (key, value) => setSettingValue(ext, key, value),
     getJSON,
+    request,
     toast: (t) => toastFn(t),
   };
 }

@@ -40,6 +40,7 @@ await build({
   define: {
     GLINT_VERSION: JSON.stringify(pkg.version),
     GLINT_SELFTEST: JSON.stringify(process.env.GLINT_SELFTEST || ''),
+    GLINT_SELFTEST_MODE: JSON.stringify(process.env.GLINT_SELFTEST_MODE || ''),
     GLINT_PRESET: JSON.stringify(preset()),
   },
   logLevel: 'info',
