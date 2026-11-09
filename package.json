@@ -1,0 +1,15 @@
+{
+  "name": "glint",
+  "version": "0.0.1",
+  "private": true,
+  "description": "TV front-end for Samsung Tizen 4 (Chromium 56) with an Apple-TV-like look; content comes from extensions",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs --dev",
+    "wgt": "node tools/build.mjs --wgt",
+    "tv": "node tools/build.mjs --wgt --install"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2"
+  }
+}

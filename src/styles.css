@@ -1,0 +1,75 @@
+/* Glint — CSS for Chromium 56 (Samsung Tizen 4.0).
+   Not available there: grid, gap in flex, backdrop-filter, inset, aspect-ratio, min()/max()/clamp(),
+   #RRGGBBAA and space-separated rgb(). Animate only transform and opacity (see docs/CHROMIUM56.md). */
+
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0b0d; }
+#tv { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; color: #f5f5f7;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased;
+  -webkit-transform-origin: 0 0; transform-origin: 0 0; }
+
+/* background: two cross-fading layers, a shade for legibility, a dim layer once the page scrolls down */
+.bg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background-size: cover; background-position: center;
+  opacity: 0; transition: opacity .7s ease; will-change: opacity; }
+.bg.on { opacity: 1; }
+.shade { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background:
+  linear-gradient(to right, rgba(8,8,10,0.86) 0%, rgba(8,8,10,0.45) 38%, rgba(8,8,10,0) 66%),
+  linear-gradient(to top, rgba(11,11,13,1) 0%, rgba(11,11,13,0.6) 30%, rgba(11,11,13,0) 55%); }
+.dim { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(11,11,13,0.84); opacity: 0; transition: opacity .5s ease; }
+.topshade { position: absolute; left: 0; top: 0; width: 1920px; height: 280px; z-index: 4; opacity: 0; transition: opacity .4s ease;
+  background: linear-gradient(to bottom, rgba(11,11,13,0.95) 0%, rgba(11,11,13,0.7) 55%, rgba(11,11,13,0) 100%); }
+#tv.deep .dim, #tv.deep .topshade { opacity: 1; }
+
+/* top menu: always on screen */
+.menu { position: absolute; left: 0; top: 40px; width: 100%; text-align: center; z-index: 8; }
+.pill { display: inline-block; height: 88px; padding: 10px; border-radius: 44px; background: rgba(46,46,54,0.78);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35); white-space: nowrap; -webkit-box-sizing: border-box; box-sizing: border-box; }
+.tab { display: inline-block; height: 68px; line-height: 68px; padding: 0 34px; border-radius: 34px; vertical-align: top;
+  font-size: 29px; font-weight: 500; color: rgba(235,235,245,0.78);
+  transition: transform .2s ease, background-color .2s ease, color .2s ease; }
+.tab.icon { width: 68px; padding: 0; text-align: center; }
+.tab svg { width: 32px; height: 32px; vertical-align: -6px; }
+.tab.sel { color: #fff; background: rgba(255,255,255,0.14); }
+.tab.focus { background: rgba(236,236,242,0.96); color: #111114; transform: scale(1.07); }
+
+/* section page */
+#section { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.page { position: absolute; left: 0; top: 0; width: 100%; transition: transform .5s cubic-bezier(.2,.8,.2,1); will-change: transform; }
+.hero { position: relative; height: 712px; }
+.hero-body { position: absolute; left: 120px; top: 230px; width: 860px; transition: opacity .4s ease; }
+#tv.deep .hero-body, #tv.deep .dots { opacity: 0; }
+.hero h1 { margin: 0; font-size: 96px; font-weight: 800; line-height: 0.95; letter-spacing: -0.01em; text-shadow: 0 4px 30px rgba(0,0,0,0.45); }
+.meta { margin-top: 22px; font-size: 25px; color: rgba(235,235,245,0.72); }
+.desc { margin-top: 14px; max-width: 760px; font-size: 26px; line-height: 1.45; color: rgba(235,235,245,0.84);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.btns { margin-top: 32px; white-space: nowrap; }
+.btn { display: inline-block; height: 76px; line-height: 76px; padding: 0 46px; margin-right: 20px; border-radius: 38px;
+  background: rgba(255,255,255,0.16); font-size: 28px; font-weight: 600; vertical-align: top;
+  transition: transform .2s ease, background-color .2s ease, color .2s ease; }
+.btn.round { width: 76px; padding: 0; text-align: center; font-size: 38px; font-weight: 400; }
+.btn.focus { background: #f5f5f7; color: #111114; transform: scale(1.08); }
+.dots { position: absolute; left: 0; bottom: 34px; width: 100%; text-align: center; transition: opacity .4s ease; }
+.dots i { display: inline-block; width: 10px; height: 10px; margin: 0 6px; border-radius: 5px; background: rgba(255,255,255,0.35);
+  transition: width .3s ease, background-color .3s ease; }
+.dots i.on { width: 30px; background: #fff; }
+
+/* rows: the focus pattern measured at ~49 fps on a Tizen 4 TV —
+   pictures at card size, transform-only animation, the shadow is a separate layer that only fades */
+.row { position: relative; padding-left: 120px; padding-bottom: 56px; }
+.row h2 { margin: 0 0 24px; font-size: 32px; font-weight: 600; color: rgba(235,235,245,0.9); }
+.track { white-space: nowrap; transition: transform .4s cubic-bezier(.2,.8,.2,1); will-change: transform; }
+.card { display: inline-block; vertical-align: top; width: 400px; margin-right: 40px; white-space: normal; }
+.thumb { position: relative; width: 400px; height: 225px; border-radius: 14px; background-size: 400px 225px; background-color: #1b1b20;
+  will-change: transform; transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.thumb:before { content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 14px;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.7); opacity: 0; transition: opacity .25s ease; }
+.card.focus .thumb { transform: scale(1.1); }
+.card.focus .thumb:before { opacity: 1; }
+.cap { margin-top: 18px; transition: transform .25s ease; }
+.card.focus .cap { transform: translateY(14px); }
+.cap b { display: block; font-size: 24px; font-weight: 600; color: rgba(245,245,247,0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap span { display: block; margin-top: 4px; font-size: 21px; color: rgba(235,235,245,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.toast { position: absolute; left: 0; bottom: 64px; width: 100%; text-align: center; z-index: 20; opacity: 0;
+  transform: translateY(20px); transition: opacity .3s ease, transform .3s ease; }
+.toast.on { opacity: 1; transform: translateY(0); }
+.toast span { display: inline-block; padding: 20px 34px; border-radius: 20px; background: rgba(28,28,32,0.95); font-size: 26px; }

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Glint — проба ТВ</title>
+<meta name="viewport" content="width=1920">
+<!--
+  Пробна сторінка Glint (етап 3 ТЗ): що вміє ТВ, коли сторінку відкрито з сервера всередині віджета.
+  Відкривається командою tvctl {"cmd":"goto","url":"/custom/glint-test/"}; результати — у /tvctl/report
+  (читати: tvctl log). Наприкінці сама повертається в Lampa (history.back()); «Назад» на пульті — теж.
+  Параметри: ?hls=<адреса m3u8> — свій потік для AVPlay; ?dev=<назва> — мітка у звітах (типово TIZEN-glint).
+  ES5, без нічого, чого нема в Chromium 56.
+-->
+<style>
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b0b0d; color: #f2f2f6; font-family: sans-serif; }
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; }
+.bg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background-size: cover; opacity: 0; transition: opacity .6s ease; }
+.bg.on { opacity: 1; }
+#row { position: absolute; left: 120px; top: 640px; white-space: nowrap; transition: transform .35s ease; }
+.card { display: inline-block; width: 400px; height: 225px; margin-right: 40px; border-radius: 14px; background-size: cover;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.45); transition: transform .25s ease, box-shadow .25s ease; }
+.card.f { transform: scale(1.1); box-shadow: 0 30px 60px rgba(0,0,0,0.7); }
+#log { position: absolute; left: 120px; top: 80px; width: 1100px; font-size: 26px; line-height: 1.5; z-index: 5;
+  background: rgba(11,11,13,0.78); padding: 24px 30px; border-radius: 20px; }
+#log b { color: #ffb86b; }
+#av { position: absolute; left: 1280px; top: 80px; width: 520px; height: 292px; z-index: 6; background: #000; }
+</style>
+</head>
+<body>
+<div id="stage"><div class="bg" id="bgA"></div><div class="bg" id="bgB"></div><div id="row"></div></div>
+<div id="log"><b>Glint · проба ТВ</b><br></div>
+<script>
+(function () {
+  'use strict';
+  var Q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) Q[p[0]] = decodeURIComponent(p[1] || ''); });
+  var DEV = Q.dev || 'TIZEN-glint';
+  var HLS = Q.hls || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+  var R = {};
+  var logEl = document.getElementById('log');
+
+  function say(t) { logEl.innerHTML += t.replace(/</g, '&lt;') + '<br>'; }
+  function report(obj) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('POST', '/tvctl/report?dev=' + encodeURIComponent(DEV), true);
+      x.setRequestHeader('Content-Type', 'text/plain');
+      x.send(JSON.stringify(obj));
+    } catch (e) {}
+  }
+  function step(name, fn, next) {
+    say('… ' + name);
+    var done = false;
+    function finish(res) {
+      if (done) return; done = true;
+      R[name] = res; report({ ev: 'glint', step: name, res: res });
+      say('✓ ' + name + ': ' + JSON.stringify(res).slice(0, 160));
+      setTimeout(next, 300);
+    }
+    try { fn(finish); } catch (e) { finish({ error: String(e && e.message || e) }); }
+  }
+
+  /* картинки без мережі: градієнт на canvas, 960×540 */
+  function art(i) {
+    var c = document.createElement('canvas'); c.width = 960; c.height = 540;
+    var g = c.getContext('2d'), h = (i * 47) % 360;
+    var gr = g.createLinearGradient(0, 0, 960, 540);
+    gr.addColorStop(0, 'hsl(' + h + ',60%,30%)'); gr.addColorStop(1, 'hsl(' + ((h + 60) % 360) + ',70%,12%)');
+    g.fillStyle = gr; g.fillRect(0, 0, 960, 540);
+    for (var k = 0; k < 40; k++) { g.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.08) + ')'; g.beginPath(); g.arc(Math.random() * 960, Math.random() * 540, 20 + Math.random() * 120, 0, 7); g.fill(); }
+    return c.toDataURL('image/jpeg', 0.85);
+  }
+
+  /* fps: інтервали requestAnimationFrame протягом ms */
+  function measure(ms, cb) {
+    var last = 0, ints = [], t0 = 0;
+    function f(t) {
+      if (!t0) t0 = t;
+      if (last) ints.push(t - last);
+      last = t;
+      if (t - t0 < ms) requestAnimationFrame(f);
+      else {
+        ints.sort(function (a, b) { return a - b; });
+        var sum = 0; ints.forEach(function (v) { sum += v; });
+        var avg = sum / ints.length;
+        cb({ frames: ints.length + 1, fps: Math.round(1000 / avg * 10) / 10, p95ms: Math.round(ints[Math.floor(ints.length * 0.95)] || 0),
+          jank: ints.filter(function (v) { return v > 34; }).length });
+      }
+    }
+    requestAnimationFrame(f);
+  }
+  function mem() { var m = performance && performance.memory; return m ? { usedMB: Math.round(m.usedJSHeapSize / 1048576), limitMB: Math.round(m.jsHeapSizeLimit / 1048576) } : 'нема performance.memory'; }
+
+  var steps = [
+    ['середовище', function (done) {
+      var sup = function (p, v) { try { return !!(window.CSS && CSS.supports(p, v)); } catch (e) { return 'err'; } };
+      done({ ua: navigator.userAgent, w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
+        webapis: typeof window.webapis, tizen: typeof window.tizen,
+        grid: sup('display', 'grid'), backdrop: sup('backdrop-filter', 'blur(2px)'), wkBackdrop: sup('-webkit-backdrop-filter', 'blur(2px)'),
+        sticky: sup('position', 'sticky'), aspect: sup('aspect-ratio', '1'), cssVars: sup('--x', '1'), mem: mem() });
+    }],
+    ['webapis', function (done) {
+      if (window.webapis) { done({ already: true, avplay: !!window.webapis.avplay }); return; }
+      var s = document.createElement('script'); s.src = '$WEBAPIS/webapis/webapis.js';
+      var t = setTimeout(function () { done({ loaded: 'timeout', webapis: typeof window.webapis }); }, 4000);
+      s.onload = function () { clearTimeout(t); done({ loaded: true, webapis: typeof window.webapis, avplay: !!(window.webapis && window.webapis.avplay) }); };
+      s.onerror = function () { clearTimeout(t); done({ loaded: 'onerror', webapis: typeof window.webapis }); };
+      document.head.appendChild(s);
+    }],
+    ['ряд карток (5 с)', function (done) {
+      var row = document.getElementById('row'), html = '';
+      for (var i = 0; i < 14; i++) html += '<div class="card" style="background-image:url(' + art(i) + ')"></div>';
+      row.innerHTML = html;
+      var bgA = document.getElementById('bgA'); bgA.style.backgroundImage = 'url(' + art(99) + ')'; bgA.className = 'bg on';
+      var cards = row.children, k = 0;
+      var tm = setInterval(function () {
+        for (var j = 0; j < cards.length; j++) cards[j].className = 'card' + (j === k ? ' f' : '');
+        row.style.transform = 'translateX(' + (-Math.max(0, k - 2) * 440) + 'px)';
+        k = (k + 1) % cards.length;
+      }, 250);
+      measure(5000, function (r) { clearInterval(tm); r.mem = mem(); done(r); });
+    }],
+    ['перехресне згасання фону (4 с)', function (done) {
+      var a = document.getElementById('bgA'), b = document.getElementById('bgB');
+      b.style.backgroundImage = 'url(' + art(7) + ')';
+      var on = false, tm = setInterval(function () { on = !on; a.className = 'bg' + (on ? '' : ' on'); b.className = 'bg' + (on ? ' on' : ''); }, 700);
+      measure(4000, function (r) { clearInterval(tm); r.mem = mem(); done(r); });
+    }],
+    ['AVPlay', function (done) {
+      var w = window.webapis;
+      if (!w || !w.avplay) { done({ skipped: 'нема webapis.avplay' }); return; }
+      var obj = document.createElement('object'); obj.id = 'av'; obj.type = 'application/avplayer'; document.body.appendChild(obj);
+      var av = w.avplay, out = { url: HLS.replace(/\?.*$/, '') }, t = setTimeout(function () { out.result = 'timeout 20 с'; try { out.state = av.getState(); av.stop(); av.close(); } catch (e) {} done(out); }, 20000);
+      try {
+        av.open(HLS);
+        av.setDisplayRect(1280, 80, 520, 292);
+        av.setListener({ onerror: function (e) { out.onerror = String(e); } });
+        out.t0 = Date.now();
+        av.prepareAsync(function () {
+          out.preparedMs = Date.now() - out.t0;
+          av.play();
+          setTimeout(function () {
+            try { out.state = av.getState(); out.posMs = av.getCurrentTime(); out.durMs = av.getDuration(); av.stop(); av.close(); } catch (e) { out.err2 = String(e); }
+            clearTimeout(t); out.result = 'ok'; done(out);
+          }, 5000);
+        }, function (e) { clearTimeout(t); out.result = 'prepare error'; out.err = String(e && e.name || e); try { av.close(); } catch (x) {} done(out); });
+      } catch (e) { clearTimeout(t); out.result = 'exception'; out.err = String(e && e.name || e.message || e); done(out); }
+    }],
+    ['video HLS', function (done) {
+      var v = document.createElement('video'), out = { canPlayType: v.canPlayType('application/vnd.apple.mpegurl') };
+      var t = setTimeout(function () { out.result = 'timeout 8 с'; v.removeAttribute('src'); v.load(); done(out); }, 8000);
+      v.muted = true; v.style.cssText = 'position:absolute;left:1280px;top:400px;width:520px;height:292px;z-index:6';
+      v.oncanplay = function () { clearTimeout(t); out.result = 'canplay'; v.pause(); v.removeAttribute('src'); v.load(); done(out); };
+      v.onerror = function () { clearTimeout(t); out.result = 'error'; out.code = v.error && v.error.code; done(out); };
+      document.body.appendChild(v); v.src = HLS;
+    }],
+    ['WebSocket до Lampac /nws', function (done) {
+      var url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/nws', out = { url: url };
+      var t = setTimeout(function () { out.result = out.result || 'timeout 6 с'; try { ws.close(); } catch (e) {} done(out); }, 6000), ws;
+      try {
+        ws = new WebSocket(url);
+        ws.onopen = function () { out.open = true; };
+        ws.onmessage = function (m) { out.firstMsg = String(m.data).slice(0, 120); out.result = 'message'; clearTimeout(t); ws.close(); done(out); };
+        ws.onerror = function () { out.error = true; };
+        ws.onclose = function (e) { out.closeCode = e.code; };
+      } catch (e) { clearTimeout(t); out.result = 'exception ' + e; done(out); }
+    }],
+    ['чужий сайт напряму (як RCH)', function (done) {
+      var x = new XMLHttpRequest(), out = { url: 'https://ufdub.com/' }, t0 = Date.now();
+      x.open('GET', out.url, true); x.timeout = 10000;
+      x.onload = function () { out.status = x.status; out.bytes = (x.responseText || '').length; out.ms = Date.now() - t0; done(out); };
+      x.onerror = function () { out.result = 'error (CORS або мережа)'; out.ms = Date.now() - t0; done(out); };
+      x.ontimeout = function () { out.result = 'timeout'; done(out); };
+      x.send();
+    }]
+  ];
+
+  var i = 0;
+  function next() {
+    if (i < steps.length) { var s = steps[i++]; step(s[0], s[1], next); return; }
+    report({ ev: 'glint', step: 'done', mem: mem() });
+    say('Готово. Повертаюсь у Lampa через 15 с (або «Назад»).');
+    setTimeout(goBack, 15000);
+  }
+  function goBack() { report({ ev: 'glint', step: 'back' }); history.back(); }
+  document.addEventListener('keydown', function (e) { if (e.keyCode === 10009 || e.keyCode === 27 || e.keyCode === 8) { e.preventDefault(); goBack(); } });
+
+  report({ ev: 'glint', step: 'start', href: location.href });
+  setTimeout(next, 500);
+})();
+</script>
+</body>
+</html>
