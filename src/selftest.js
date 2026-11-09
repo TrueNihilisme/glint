@@ -46,14 +46,15 @@ const AB_CSS =
   '.ab-noshade .shade,.ab-noshade .dim,.ab-noshade .topshade{display:none}' +
   '.ab-nobg .bg{display:none}' +
   '.ab-noshadow .thumb:before{display:none}' +
-  '.ab-bgwc .bg{will-change:transform}';
+  '.ab-bgwc .bg{will-change:transform}' +
+  '.ab-noglass .thumb:after{display:none}';
 
 async function rowAB(press, send) {
   const tv = document.getElementById('tv');
   const st = document.createElement('style');
   st.textContent = AB_CSS;
   document.head.appendChild(st);
-  const variants = ['', 'ab-nobg'];
+  const variants = ['', 'ab-noglass', 'ab-nobg'];
   for (let round = 1; round <= 2; round++) {
     for (const v of variants) {
       if (v) tv.classList.add(v);

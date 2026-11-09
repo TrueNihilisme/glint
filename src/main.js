@@ -11,6 +11,7 @@ import { load } from './store.js';
 import { demoSection } from './data/stub.js';
 import { esc, $, $$ } from './ui/util.js';
 import { selftest } from './selftest.js';
+import { markKey } from './idle.js';
 
 /* global GLINT_VERSION, GLINT_PRESET, GLINT_SELFTEST, GLINT_SELFTEST_MODE */
 window.Glint = { version: GLINT_VERSION, register, debug: () => debugInfo() };
@@ -58,6 +59,9 @@ const bg = (() => {
   return {
     set(url) {
       clearTimeout(wait);
+      // the background sits under a shade and often a dim layer: a 780-px TMDB copy is plenty, and a third of
+      // the pixels of the 1280-px one to decode
+      url = String(url || '').replace('/t/p/w1280/', '/t/p/w780/').replace('/t/p/original/', '/t/p/w780/');
       if (!url || url === cur) return;
       wait = setTimeout(() => apply(url), cur ? 300 : 0);
     },
@@ -115,7 +119,13 @@ const menuZone = {
   items: () => $$('.menu .tab'),
   // sections open only after the extensions have loaded — earlier the first one was built from demo
   // data (no extension yet) and stayed that way
-  onFocus: (i) => { const m = menuEntries()[i]; if (ready && m) openEntry(m.key); },
+  // the page is built once the focus rests on a tab for 350 ms: walking across the menu built every page on the
+  // way, each with ~9 rows, and the TV dropped to ~3 fps
+  onFocus: (i) => {
+    clearTimeout(menuWait);
+    const m = menuEntries()[i];
+    if (ready && m) menuWait = setTimeout(() => { if (focus.zone() === 'menu' && focus.index('menu') === i) openEntry(m.key); }, 350);
+  },
   onEnter: (i) => {
     const n = menuEntries().length;
     if (i === n) { openSearch(); return; }
@@ -237,6 +247,7 @@ function openEntry(key, focusContent) {
 let firstOpen = true;
 let ready = false;
 let reopenFocus = null;
+let menuWait = 0;
 
 // ── search: every extension with search(query, ctx) → rows ──
 function openSearch() {
@@ -322,6 +333,7 @@ function openSettings() { settingsOpen = true; $('.drop').classList.remove('on')
 
 // ── keys ──
 function press(a) {
+  markKey();
   if (player.open) { player.key(a); return; }
   if (a === 'playpause') return;
   if (a === 'enter') focus.enter();

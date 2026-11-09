@@ -87,3 +87,21 @@ while the TV is idle, smaller backdrops (w780) for the hero, build a section's c
 
 The build targets `chrome56` with esbuild: newer syntax is lowered, and what cannot be lowered fails the build.
 No ES modules at runtime (`type="module"` arrived later) — the app is one IIFE bundle.
+
+### With ~9 rows per section (TMDB + lampac-mcp), 2026-11-09 evening
+
+Everything above was measured with 2 rows. With ~9 rows of 20 cards the TV slowed down again; A/B inside one run
+showed what costs what:
+
+| Change | Row of cards | Row → row | Sections ×3 |
+|---|---|---|---|
+| before (every card and track on its own layer, animated shadow, background changes in every row) | 24–29 | 3.5 | 5–7 |
+| layers only for rows near the focus, far rows `visibility: hidden` | 25–30 | 4.4 | 6.6 |
+| no animated shadow (a static small one), background kept still below the hero, 780-px backdrops | **52–56** | **38.5** | 19.3 |
+| + only 3 rows built at once, the rest while the remote is quiet | 50–55 | 32 | 20.5 |
+
+What mattered most: **fading a 60-px blurred shadow repaints the card every frame** (+9 fps without it) and
+**changing a full-screen photo while walking rows** (row → row from ~4 to ~38 fps when the background stays put
+below the hero, where it is dimmed by 84% anyway). The glass rim and sheen cost almost nothing once the shadow
+was static (54 fps without it, 50–56 with it). Still slow: switching the hero title (~19 fps, a new photo each
+time) and switching sections (~20 fps).
