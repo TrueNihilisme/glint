@@ -111,7 +111,11 @@ function sectionData(id) {
       return [];
     })
   )).then((lists) => {
-    const rows = [].concat.apply([], lists).filter((r) => r && r.items && r.items.length);
+    // Order: a row may set `order`; otherwise posters come first, wide cards next, the rest after —
+    // the same order whichever extension the rows came from. Equal orders keep the extensions' order.
+    const rank = (r) => (typeof r.order === 'number' ? r.order : r.style === 'poster' ? 10 : r.style === 'wide' ? 20 : 50);
+    const rows = [].concat.apply([], lists).filter((r) => r && r.items && r.items.length)
+      .map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map((x) => x.r);
     let data;
     if (!rows.length) data = demoSection(id);
     else {
