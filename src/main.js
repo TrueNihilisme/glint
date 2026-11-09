@@ -4,6 +4,7 @@ import { createSection } from './screens/section.js';
 import { createSettings } from './screens/settings.js';
 import { createTitle } from './screens/title.js';
 import { createPlayer } from './player.js';
+import { ask } from './ui/input.js';
 import { register, loadExtensions, extensions, contextFor, applyPreset, setToast, problem, debugInfo } from './ext/registry.js';
 import { load } from './store.js';
 import { demoSection } from './data/stub.js';
@@ -21,6 +22,7 @@ const SECTIONS = [
   { id: 'anime', title: 'Аніме' },
 ];
 
+const LENS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>';
 const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
   '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>';
 
@@ -103,7 +105,7 @@ function drawMenu() {
   $('.menu').innerHTML = '<div class="pill">' +
     menuEntries().map((m) => '<span class="tab' + (m.key === current ? ' sel' : '') + '">' + esc(m.title) +
       (m.items && m.items.length > 1 ? '<span class="chev">▾</span>' : '') + '</span>').join('') +
-    '<span class="tab icon" aria-label="Налаштування">' + GEAR + '</span></div>';
+    '<span class="tab icon" aria-label="Пошук">' + LENS + '</span><span class="tab icon" aria-label="Налаштування">' + GEAR + '</span></div>';
 }
 
 const menuZone = {
@@ -114,8 +116,10 @@ const menuZone = {
   // data (no extension yet) and stayed that way
   onFocus: (i) => { const m = menuEntries()[i]; if (ready && m) openEntry(m.key); },
   onEnter: (i) => {
+    const n = menuEntries().length;
+    if (i === n) { openSearch(); return; }
+    if (i > n) { openSettings(); return; }
     const m = menuEntries()[i];
-    if (!m) { openSettings(); return; }
     if (m.items && m.items.length > 1) focus.focus('drop', sub[m.key] || 0);
     else if (pageZones[0]) focus.focus(pageZones[0].id);
   },
@@ -228,6 +232,32 @@ function openEntry(key, focusContent) {
 let firstOpen = true;
 let ready = false;
 
+// ── search: every extension with search(query, ctx) → rows ──
+function openSearch() {
+  const withSearch = extensions().filter((e) => typeof e.search === 'function');
+  if (!withSearch.length) { toast('Пошук дасть розширення з даними (напр. TMDB)'); return; }
+  ask('Пошук', '', 'Назва фільму, серіалу, аніме…').then((q) => {
+    focus.refresh();
+    if (!q) return;
+    toast('Шукаю «' + q + '»…');
+    const t = ++ticket;
+    Promise.all(withSearch.map((e) => Promise.resolve().then(() => e.search(q, contextFor(e)))
+      .then((rows) => { (rows || []).forEach((r) => (r.items || []).forEach((it) => { if (!it._ext) it._ext = e; })); return rows || []; })
+      .catch((err) => { problem((e.name || e.id) + ' search: ' + (err && err.message || err)); return []; })))
+      .then((lists) => {
+        if (t !== ticket) return;
+        const rows = [].concat.apply([], lists).filter((r) => r && r.items && r.items.length);
+        current = 'search';
+        drawMenu();
+        const s = createSection($('#section'), { hero: [], rows, note: rows.length ? 'Пошук: «' + q + '»' : 'За «' + q + '» нічого не знайшлося' }, {
+          focus, bg, toast, onDeep: (deep) => tv.classList.toggle('deep', deep), openTitle,
+        });
+        pageZones = s.zones;
+        focus.set([menuZone, dropZone].concat(pageZones), pageZones[0] ? pageZones[0].id : 'menu');
+      });
+  });
+}
+
 // ── title page; a card with a stream (a TV channel) plays at once ──
 let titleOpen = false;
 let beforeTitle = null;
@@ -286,7 +316,10 @@ function press(a) {
   else if (a === 'back') {
     if (settingsOpen) settings.back();
     else if (titleOpen) closeTitle();
-    else if (focus.zone() !== 'menu') focus.focus('menu', menuEntries().findIndex((m) => m.key === current));
+    else if (focus.zone() !== 'menu') {
+      const k = menuEntries().findIndex((m) => m.key === current);
+      focus.focus('menu', k >= 0 ? k : menuEntries().length);   // search results: back to the search icon
+    }
     else exitApp();
   } else focus.move(a);
   if (!settingsOpen && !titleOpen) updateDrop();
