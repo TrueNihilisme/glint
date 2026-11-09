@@ -44,3 +44,7 @@ GLINT_TV=<TV ip> npm run tv     # sign, install and launch on the TV
 | `src/data/stub.js` | placeholder titles and canvas pictures |
 | `widget/` | `config.xml` template and the icon |
 | `probes/` | pages that measure the TV |
+
+## License
+
+[GPL-3.0](LICENSE) or later. Use and change Glint freely; if you publish a changed version, publish its source too.
