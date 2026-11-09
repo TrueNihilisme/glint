@@ -157,3 +157,22 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .check { position: absolute; right: 12px; top: 12px; z-index: 2; width: 38px; height: 38px; line-height: 38px; border-radius: 19px; text-align: center;
   font-size: 22px; font-weight: 700; color: #111114; background: rgba(245,245,247,0.92); }
 .t-empty { padding: 30px 0; font-size: 26px; color: rgba(235,235,245,0.6); }
+
+/* player. AVPlay draws the video on a plane under the web page, so while it plays the page itself must be
+   transparent: body.playing clears the backgrounds and hides everything but the player. */
+.player { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 40; display: none; }
+.player.on { display: block; }
+body.playing, body.playing #tv { background: transparent; }
+body.playing #tv > * { visibility: hidden; }
+body.playing #tv > .player, body.playing #tv > .toast { visibility: visible; }
+.p-screen, .p-av, .p-video { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.p-video { background: #000; }
+.p-ui { position: absolute; left: 0; bottom: 0; width: 1920px; height: 300px; opacity: 0; transition: opacity .3s ease;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%); }
+.player.ui .p-ui { opacity: 1; }
+.p-title { position: absolute; left: 120px; bottom: 150px; font-size: 44px; font-weight: 700; }
+.p-sub { position: absolute; left: 122px; bottom: 112px; font-size: 24px; color: rgba(235,235,245,0.7); }
+.p-bar { position: absolute; left: 120px; right: 320px; bottom: 70px; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.25); }
+.p-bar i { display: block; width: 0; height: 8px; border-radius: 4px; background: #f5f5f7; }
+.p-time { position: absolute; right: 120px; bottom: 56px; width: 180px; text-align: right; font-size: 26px; color: rgba(235,235,245,0.85); }
+.p-msg { position: absolute; left: 0; top: 500px; width: 1920px; text-align: center; font-size: 30px; color: rgba(245,245,247,0.9); }

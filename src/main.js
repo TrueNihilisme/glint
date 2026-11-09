@@ -3,6 +3,7 @@ import { KEY, registerMediaKeys, exitApp, fit } from './platform.js';
 import { createSection } from './screens/section.js';
 import { createSettings } from './screens/settings.js';
 import { createTitle } from './screens/title.js';
+import { createPlayer } from './player.js';
 import { register, loadExtensions, extensions, contextFor, applyPreset, setToast, problem, debugInfo } from './ext/registry.js';
 import { load } from './store.js';
 import { demoSection } from './data/stub.js';
@@ -73,6 +74,7 @@ function toast(text) {
 setToast(toast);
 
 const focus = createFocus();
+const player = createPlayer(tv);
 
 // ── menu ──
 function visibleSections() {
@@ -164,7 +166,7 @@ function openTitle(it) {
   tv.classList.add('ov');
   const root = $('#title');
   root.classList.add('on');
-  const t = createTitle(root, it, { focus, bg, toast });
+  const t = createTitle(root, it, { focus, bg, toast, player });
   focus.set(t.zones, 'tbtn');
 }
 function closeTitle() {
@@ -192,6 +194,8 @@ function openSettings() { settingsOpen = true; settings.open(); }
 
 // ── keys ──
 function press(a) {
+  if (player.open) { player.key(a); return; }
+  if (a === 'playpause') return;
   if (a === 'enter') { focus.enter(); return; }
   if (a === 'back') {
     if (settingsOpen) { settings.back(); return; }

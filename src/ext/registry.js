@@ -111,11 +111,27 @@ export function contextFor(ext) {
   };
 }
 
-// A local build may carry a preset (GLINT_PRESET at build time): extensions and their settings,
-// applied once on the first start so nothing has to be typed with the remote.
+// A local build may carry a preset (GLINT_PRESET at build time): extensions and their settings, so nothing
+// has to be typed with the remote. Applied once per preset version `v`: extensions it lists are added, and an
+// older copy of the same file (same address without the @version part, as jsDelivr links have) is replaced;
+// the settings it gives overwrite those keys only. Extensions the user added stay.
+const fileKey = (url) => String(url).replace(/@[^/]+/, '');
 export function applyPreset(preset) {
-  if (!preset || load('ext', null) !== null) return;
-  setEntries((preset.ext || []).map((e) => ({ url: e.url, on: e.on !== false })));
+  if (!preset) return;
+  const v = preset.v || 1;
+  if (load('preset.v', 0) === v) return;
+  const list = entries();
+  (preset.ext || []).forEach((e) => {
+    const k = list.findIndex((x) => fileKey(x.url) === fileKey(e.url));
+    if (k >= 0) list[k] = { url: e.url, on: list[k].on };
+    else list.push({ url: e.url, on: e.on !== false });
+  });
+  setEntries(list);
   const s = preset.settings || {};
-  Object.keys(s).forEach((id) => save('ext.' + id, s[id]));
+  Object.keys(s).forEach((id) => {
+    const cur = load('ext.' + id, {});
+    Object.keys(s[id]).forEach((key) => { cur[key] = s[id][key]; });
+    save('ext.' + id, cur);
+  });
+  save('preset.v', v);
 }
