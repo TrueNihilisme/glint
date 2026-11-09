@@ -1,14 +1,17 @@
 import { createFocus } from './focus.js';
 import { KEY, registerMediaKeys, exitApp, fit } from './platform.js';
 import { createSection } from './screens/section.js';
-import { register } from './ext/registry.js';
+import { createSettings } from './screens/settings.js';
+import { register, loadExtensions, extensions, contextFor, applyPreset, setToast, problem, debugInfo } from './ext/registry.js';
+import { load } from './store.js';
+import { demoSection } from './data/stub.js';
 import { esc, $, $$ } from './ui/util.js';
 import { selftest } from './selftest.js';
 
-/* global GLINT_VERSION */
-window.Glint = { version: GLINT_VERSION, register };
+/* global GLINT_VERSION, GLINT_PRESET, GLINT_SELFTEST */
+window.Glint = { version: GLINT_VERSION, register, debug: () => debugInfo() };
 
-// Core sections. TV and Music are not here on purpose: they appear when an extension brings them.
+// Core sections. TV and Music are not here on purpose: they come with extensions.
 const SECTIONS = [
   { id: 'movies', title: 'Фільми' },
   { id: 'series', title: 'Серіали' },
@@ -22,11 +25,8 @@ const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 const tv = document.getElementById('tv');
 tv.innerHTML =
   '<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div><div class="shade"></div><div class="dim"></div>' +
-  '<div id="section"></div><div class="topshade"></div>' +
-  '<nav class="menu"><div class="pill">' +
-  SECTIONS.map((s, i) => '<span class="tab' + (i ? '' : ' sel') + '">' + esc(s.title) + '</span>').join('') +
-  '<span class="tab icon" aria-label="Налаштування">' + GEAR + '</span></div></nav>' +
-  '<div class="toast"><span></span></div>';
+  '<div id="section"></div><div class="topshade"></div><nav class="menu"></nav>' +
+  '<div id="settings"></div><div class="toast"><span></span></div>';
 
 // Background: two layers that cross-fade. After the fade the hidden one gets visibility:hidden —
 // a full-screen layer at opacity 0 is still composited every frame, and on a Tizen 4 TV that alone
@@ -36,20 +36,29 @@ const bg = (() => {
   let back = $('#bgB');
   let cur = '';
   let timer = 0;
+  let wait = 0;
+  // A new background is applied only once the focus has rested for 300 ms: decoding a photo on every
+  // key press while walking a row took it down to ~8 fps on the TV with real TMDB backdrops.
   return {
     set(url) {
-      if (!url || url === cur) return;
+      if (!url || url === cur) { clearTimeout(wait); return; }
+      clearTimeout(wait);
+      wait = setTimeout(() => apply(url), cur ? 300 : 0);
+    },
+  };
+  function apply(url) {
+    {
       cur = url;
       clearTimeout(timer);
-      back.style.backgroundImage = 'url(' + url + ')';
+      back.style.backgroundImage = 'url("' + String(url).replace(/["\\]/g, '') + '")';
       back.style.visibility = 'visible';
       back.classList.add('on');
       front.classList.remove('on');
       const t = front; front = back; back = t;
       const old = back;
       timer = setTimeout(() => { old.style.visibility = 'hidden'; }, 750);
-    },
-  };
+    }
+  }
 })();
 
 let toastTimer = 0;
@@ -58,53 +67,131 @@ function toast(text) {
   $('span', el).textContent = text;
   el.classList.add('on');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('on'), 2400);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2600);
 }
+setToast(toast);
 
 const focus = createFocus();
-let current = -1;
 
+// ── menu ──
+function visibleSections() {
+  const h = load('menu.hidden', []);
+  return SECTIONS.filter((s) => h.indexOf(s.id) < 0);
+}
+let current = null;   // section id
+function drawMenu() {
+  const vis = visibleSections();
+  $('.menu').innerHTML = '<div class="pill">' +
+    vis.map((s) => '<span class="tab' + (s.id === current ? ' sel' : '') + '">' + esc(s.title) + '</span>').join('') +
+    '<span class="tab icon" aria-label="Налаштування">' + GEAR + '</span></div>';
+}
 const menuZone = {
   id: 'menu',
   dir: 'h',
   items: () => $$('.menu .tab'),
-  onFocus: (i) => { if (i < SECTIONS.length) openSection(i); },
+  // sections open only after the extensions have loaded — earlier the first one was built from demo
+  // data (no extension yet) and stayed that way
+  onFocus: (i) => { const vis = visibleSections(); if (ready && i < vis.length) openSection(vis[i].id); },
   onEnter: (i) => {
-    if (i < SECTIONS.length) focus.focus('hero');
-    else toast('Налаштування й розширення — на наступному етапі');
+    if (i >= visibleSections().length) openSettings();
+    else if (sectionZones[0]) focus.focus(sectionZones[0].id);
   },
 };
 
-function openSection(i) {
-  if (i === current) return;
-  current = i;
-  $$('.menu .tab').forEach((t, k) => t.classList.toggle('sel', k === i));
-  const section = createSection($('#section'), SECTIONS[i].id, {
-    focus, bg, toast,
-    onDeep: (deep) => tv.classList.toggle('deep', deep),
+// ── sections: rows from extensions, demo rows when there are none ──
+const cache = {};
+function sectionData(id) {
+  if (cache[id]) return Promise.resolve(cache[id]);
+  const withRows = extensions().filter((e) => typeof e.rows === 'function');
+  return Promise.all(withRows.map((e) =>
+    Promise.resolve().then(() => e.rows(id, contextFor(e))).catch((err) => {
+      const msg = (e.name || e.id) + ': ' + (err && err.message || err);
+      problem(msg);
+      toast(msg);
+      return [];
+    })
+  )).then((lists) => {
+    const rows = [].concat.apply([], lists).filter((r) => r && r.items && r.items.length);
+    let data;
+    if (!rows.length) data = demoSection(id);
+    else {
+      const seen = {};
+      const hero = [];
+      rows.forEach((r) => r.items.forEach((it) => { if (hero.length < 5 && it.backdrop && !seen[it.id]) { seen[it.id] = 1; hero.push(it); } }));
+      data = { hero, rows };
+    }
+    if (!data.demo) cache[id] = data;   // demo is never cached: real rows may still arrive
+    return data;
   });
-  focus.set([menuZone].concat(section.zones), focus.zone() || 'hero');
 }
 
+let sectionZones = [];
+let ticket = 0;
+function openSection(id) {
+  if (id === current) return;
+  current = id;
+  drawMenu();
+  const t = ++ticket;
+  sectionData(id).then((data) => {
+    if (t !== ticket) return;   // another section was chosen meanwhile
+    const s = createSection($('#section'), data, {
+      focus, bg, toast,
+      onDeep: (deep) => tv.classList.toggle('deep', deep),
+      openTitle: (it) => toast('«' + it.title + '» — картка на наступному етапі'),
+    });
+    sectionZones = s.zones;
+    if (settingsOpen) return;
+    // the very first section opens with the focus on its content, later ones keep it on the menu
+    const start = firstOpen && sectionZones[0] ? sectionZones[0].id : focus.zone() || 'menu';
+    firstOpen = false;
+    focus.set([menuZone].concat(sectionZones), start);
+  });
+}
+let firstOpen = true;
+let ready = false;
+
+// ── settings ──
+let settingsOpen = false;
+const settings = createSettings($('#settings'), {
+  focus, toast, sections: SECTIONS, version: GLINT_VERSION,
+  close: () => { settingsOpen = false; focus.set([menuZone].concat(sectionZones), 'menu'); },
+  reload: () => setTimeout(() => location.reload(), 700),
+  menuChanged: () => {
+    const vis = visibleSections();
+    if (!vis.some((s) => s.id === current)) { current = null; openSection(vis[0].id); }
+    drawMenu();
+  },
+});
+function openSettings() { settingsOpen = true; settings.open(); }
+
+// ── keys ──
 function press(a) {
-  if (a === 'enter') focus.enter();
-  else if (a === 'back') {
-    if (focus.zone() !== 'menu') focus.focus('menu', current);
-    else exitApp();
-  } else focus.move(a);
+  if (a === 'enter') { focus.enter(); return; }
+  if (a === 'back') {
+    if (settingsOpen) { settings.back(); return; }
+    if (focus.zone() !== 'menu') { focus.focus('menu', visibleSections().findIndex((s) => s.id === current)); return; }
+    exitApp();
+    return;
+  }
+  focus.move(a);
 }
-
 document.addEventListener('keydown', (e) => {
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;   // the prompt handles its own keys
   const a = KEY[e.keyCode];
   if (!a) return;
   e.preventDefault();
   press(a);
 });
 
+// ── start ──
 registerMediaKeys();
 fit(tv);
 window.addEventListener('resize', () => fit(tv));
-openSection(0);
-
-/* global GLINT_SELFTEST */
-if (GLINT_SELFTEST) selftest(GLINT_SELFTEST, press);
+if (GLINT_PRESET) applyPreset(JSON.parse(GLINT_PRESET));
+drawMenu();
+focus.set([menuZone], 'menu');
+loadExtensions().then(() => {
+  ready = true;
+  openSection(visibleSections()[0].id);
+  if (GLINT_SELFTEST) setTimeout(() => selftest(GLINT_SELFTEST, press), 1500);
+});

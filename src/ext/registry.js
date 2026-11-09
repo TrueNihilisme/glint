@@ -1,21 +1,121 @@
-// Extensions — stage 3 of the plan, only the shape for now.
+import { load, save } from '../store.js';
+
+// Extensions.
 //
-// The core knows nothing about any server. An extension is a script the user adds by URL
-// (Settings → Extensions → Add); it calls Glint.register({...}) and can contribute:
-//   menu      items or sub-items of the top menu (e.g. TV → IPTV)
-//   rows      rows for a section (Movies, Series, …)
-//   sources   where a title can be played from (list, seasons, episodes, voices)
-//   settings  its own settings page (fields the user turns on and off)
-// An extension is someone else's code running in the app: before enabling one, Glint shows its name and URL.
+// The core knows no server. An extension is a script the user adds by URL (Settings → Extensions → Add).
+// It runs Glint.register({...}) and may give:
+//   id, name, version
+//   settings: [{ key, title, type: 'text' | 'toggle', placeholder?, default? }]   — its own settings page
+//   rows(section, ctx) → Promise<[{ title, style: 'poster'|'wide', ai?, items: [Item] }]>
+//                         section: 'movies' | 'series' | 'cartoons' | 'anime'
+//   Item: { id, title, card, backdrop, year?, genre?, meta?, desc?, tmdb?: { id, type } }
+// ctx: { get(key), set(key, value), getJSON(url, ms?), toast(text) }
+//
+// An extension is someone else's code inside the app — the settings page shows its address, and it
+// runs only while it is switched on. Extension files must run on Chromium 56 as they are (ES5 is safest).
 
 const list = [];
+const status = {};      // url → 'ok' | 'error' | 'timeout' | 'no-register' | 'off'
+let loading = null;
+let toastFn = () => {};
+
+export function setToast(fn) { toastFn = fn; }
 
 export function register(ext) {
   if (!ext || !ext.id) throw new Error('Glint.register: an extension needs an id');
   if (list.some((e) => e.id === ext.id)) throw new Error('Glint.register: duplicate id ' + ext.id);
+  ext.url = loading;
   list.push(ext);
+  if (loading) status[loading] = 'ok';
 }
 
-export function extensions() {
-  return list.slice();
+export function extensions() { return list.slice(); }
+
+// what went wrong, for the settings page and the self-test report
+const problems = [];
+export function problem(text) { problems.push(String(text)); if (problems.length > 20) problems.shift(); }
+export function debugInfo() {
+  return { entries: entries().map((e) => ({ url: e.url.slice(-60), on: e.on, status: statusOf(e.url) })), registered: list.map((e) => e.id), problems: problems.slice() };
+}
+export function byUrl(url) { return list.find((e) => e.url === url) || null; }
+export function statusOf(url) { return status[url] || 'off'; }
+
+// [{ url, on }] — the order is the load order
+export function entries() { return load('ext', []); }
+export function setEntries(next) { save('ext', next); }
+
+function loadOne(url) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (st) => {
+      if (done) return;
+      done = true;
+      if (status[url] !== 'ok') status[url] = st;
+      loading = null;
+      resolve();
+    };
+    loading = url;
+    const s = document.createElement('script');
+    s.onload = () => finish('no-register');
+    s.onerror = () => finish('error');
+    setTimeout(() => finish('timeout'), 10000);
+    s.src = url;
+    document.head.appendChild(s);
+  });
+}
+
+// one by one, so each register() call is tied to the script that made it
+export function loadExtensions() {
+  let p = Promise.resolve();
+  entries().forEach((en) => {
+    if (!en.on) { status[en.url] = 'off'; return; }
+    p = p.then(() => loadOne(en.url));
+  });
+  return p;
+}
+
+export function getJSON(url, ms) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('GET', url, true);
+    x.timeout = ms || 15000;
+    x.onload = () => {
+      if (x.status < 200 || x.status >= 300) { reject(new Error('HTTP ' + x.status)); return; }
+      try { resolve(JSON.parse(x.responseText)); } catch (e) { reject(new Error('bad JSON')); }
+    };
+    x.onerror = () => reject(new Error('network'));
+    x.ontimeout = () => reject(new Error('timeout'));
+    x.send();
+  });
+}
+
+export function settingValue(ext, key) {
+  const v = load('ext.' + ext.id, {})[key];
+  if (v != null) return v;
+  const f = (ext.settings || []).find((x) => x.key === key);
+  return f ? f.default : undefined;
+}
+
+export function setSettingValue(ext, key, value) {
+  const all = load('ext.' + ext.id, {});
+  all[key] = value;
+  save('ext.' + ext.id, all);
+}
+
+export function contextFor(ext) {
+  return {
+    get: (key) => settingValue(ext, key),
+    set: (key, value) => setSettingValue(ext, key, value),
+    getJSON,
+    toast: (t) => toastFn(t),
+  };
+}
+
+// A local build may carry a preset (GLINT_PRESET at build time): extensions and their settings,
+// applied once on the first start so nothing has to be typed with the remote.
+export function applyPreset(preset) {
+  if (!preset || load('ext', null) !== null) return;
+  setEntries((preset.ext || []).map((e) => ({ url: e.url, on: e.on !== false })));
+  const s = preset.settings || {};
+  Object.keys(s).forEach((id) => save('ext.' + id, s[id]));
 }

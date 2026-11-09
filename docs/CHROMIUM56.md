@@ -68,6 +68,21 @@ A layer at `opacity: 0` is still composited every frame. Fix: after the cross-fa
 `visibility: hidden`, and `.bg` has no permanent `will-change`. After the fix: **row 49.7 / 55.2 fps**
 (background off: 53.6 / 53.4). Still to improve: row → row with a background change (37.5 fps).
 
+### With real pictures (rows from lampac-mcp, TMDB posters w342 / backdrops w1280)
+
+Changing the background on every key press made walking a row ~8–27 fps: each press started decoding a
+1280-px photo. **The background now changes only after the focus rests for 300 ms.** Result (same run):
+
+| What | fps |
+|---|---|
+| Row, pictures already loaded | 48.6 / 48.6 (background off: 49.2 / 50.7) |
+| Row, first pass while posters still load | 29.2 |
+| Row → next row, first time (page scroll + 15 new posters) | 14.2 |
+| Switching sections, first time (30 new pictures) | 24.9 |
+
+The remaining stalls are first-time picture decoding. Ideas, not tried yet: load the next row's posters
+while the TV is idle, smaller backdrops (w780) for the hero, build a section's cards in two steps.
+
 ## JavaScript
 
 The build targets `chrome56` with esbuild: newer syntax is lowered, and what cannot be lowered fails the build.

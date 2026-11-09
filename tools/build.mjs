@@ -16,6 +16,14 @@ const args = new Set(process.argv.slice(2));
 const dev = args.has('--dev');
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
+function preset() {
+  const v = process.env.GLINT_PRESET;
+  if (!v) return '';
+  const text = existsSync(v) ? readFileSync(v, 'utf8') : v;
+  JSON.parse(text);   // fail the build on a broken preset, not the TV
+  return text;
+}
+
 rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist', { recursive: true });
 
@@ -28,7 +36,12 @@ await build({
   sourcemap: dev ? 'inline' : false,
   outfile: 'dist/app.js',
   // GLINT_SELFTEST=<report url> builds in src/selftest.js (drives the remote, POSTs frame times there)
-  define: { GLINT_VERSION: JSON.stringify(pkg.version), GLINT_SELFTEST: JSON.stringify(process.env.GLINT_SELFTEST || '') },
+  // GLINT_PRESET=<file.json | json> — extensions and their settings applied on the first start (local builds only)
+  define: {
+    GLINT_VERSION: JSON.stringify(pkg.version),
+    GLINT_SELFTEST: JSON.stringify(process.env.GLINT_SELFTEST || ''),
+    GLINT_PRESET: JSON.stringify(preset()),
+  },
   logLevel: 'info',
 });
 

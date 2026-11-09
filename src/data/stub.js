@@ -1,4 +1,4 @@
-// Placeholder content until extensions bring real data. Titles are made up; pictures are drawn on a canvas,
+// Demo content, shown only while no extension gives rows. Titles are made up; pictures are drawn on a canvas
 // at the size they are shown (cards 400×225, backdrops 960×540) — big pictures in small cards cost frames on the TV.
 
 function art(seed, w, h) {
@@ -32,29 +32,31 @@ const TITLES = [
 
 let cache = null;
 
-export function stubItems() {
+function items() {
   if (cache) return cache;
   cache = TITLES.map((t, i) => ({
-    id: 'stub' + i,
+    id: 'demo' + i,
     title: t[0],
     genre: t[1],
     year: t[2],
-    desc: 'Опис зʼявиться, коли підключиться розширення з даними. Поки це заглушка, щоб перевірити вигляд і фокус.',
+    desc: 'Демо-картка. Справжні ряди зʼявляться, коли в Налаштуваннях додати розширення з даними.',
     card: art(i + 1, 400, 225),
     backdrop: art(i + 1, 960, 540),
   }));
   return cache;
 }
 
-export function stubSection(kind) {
-  const items = stubItems();
+export function demoSection(kind) {
+  const all = items();
   const shift = { movies: 0, series: 3, cartoons: 6, anime: 9 }[kind] || 0;
-  const rot = items.slice(shift).concat(items.slice(0, shift));
+  const rot = all.slice(shift).concat(all.slice(0, shift));
   return {
+    demo: true,
+    note: 'Демо-дані: додайте розширення в Налаштуваннях (шестерня праворуч).',
     hero: rot.slice(0, 4),
     rows: [
-      { title: 'Нове', items: rot.slice(0, 8) },
-      { title: 'Варто подивитися', items: rot.slice(4).concat(rot.slice(0, 4)) },
+      { title: 'Нове', style: 'wide', items: rot.slice(0, 8) },
+      { title: 'Варто подивитися', style: 'wide', items: rot.slice(4).concat(rot.slice(0, 4)) },
     ],
   };
 }

@@ -45,7 +45,8 @@ const AB_CSS =
   '.ab-nowc .thumb{will-change:auto}.ab-nowc .track{will-change:auto}' +
   '.ab-noshade .shade,.ab-noshade .dim,.ab-noshade .topshade{display:none}' +
   '.ab-nobg .bg{display:none}' +
-  '.ab-noshadow .thumb:before{display:none}';
+  '.ab-noshadow .thumb:before{display:none}' +
+  '.ab-bgwc .bg{will-change:transform}';
 
 async function rowAB(press, send) {
   const tv = document.getElementById('tv');
@@ -75,7 +76,14 @@ export async function selftest(url, press) {
     } catch (e) { /* nothing to report to */ }
   };
   const t0 = Date.now();
-  send('start', { ua: navigator.userAgent, mem: mem(), tizen: typeof window.tizen, avplay: !!(window.webapis && window.webapis.avplay) });
+  const rows = Array.prototype.slice.call(document.querySelectorAll('.row h2')).map((h) => h.textContent);
+  const cards = document.querySelectorAll('.card .thumb');
+  send('start', {
+    mem: mem(), tizen: typeof window.tizen, avplay: !!(window.webapis && window.webapis.avplay),
+    rows, demo: !!document.querySelector('.note'), cards: cards.length,
+    firstCard: cards[0] ? String(cards[0].style.backgroundImage).slice(0, 90) : null,
+    ext: window.Glint && window.Glint.debug ? window.Glint.debug() : null,
+  });
   await wait(4000);   // right after install/launch the TV is busy: numbers taken earlier were noise
   send('idle', await measure(2000));
   send('hero: next title ×4', await run(press, ['right', 'right', 'right', 'right'], 500, 2500));
