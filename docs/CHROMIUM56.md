@@ -105,3 +105,23 @@ What mattered most: **fading a 60-px blurred shadow repaints the card every fram
 below the hero, where it is dimmed by 84% anyway). The glass rim and sheen cost almost nothing once the shadow
 was static (54 fps without it, 50–56 with it). Still slow: switching the hero title (~19 fps, a new photo each
 time) and switching sections (~20 fps).
+
+### Hero, sections and the background (2026-11-09, late evening)
+
+| Change (A/B inside one run where marked) | Hero ×4 | Sections ×3 |
+|---|---|---|
+| before | ~19 | ~20 |
+| hero text updated in place, built sections kept and re-attached | 34–40 | 16–42 (noisy) |
+| A/B: background layers hidden (`display: none`) | 37–38 | 44–59, p95 30–40 ms |
+
+Building a section takes 35–75 ms (measured with `Date.now()` around it), and going back to sections already
+built was just as slow — so building was not the problem; the full-screen background was. What did **not**
+help (A/B, same run): a 960×540 layer scaled ×2, no cross-fade, no shade, a 300-px photo instead of 780 px,
+and a plain colour instead of a photo (sections 21–41). Any change of a full-screen layer costs frames here,
+whatever is on it; why exactly is not known yet.
+
+What Glint does now: the hero shows its title's photo full-screen (the look was preferred over the speed);
+below the hero the background is a colour taken from the focused card — a 92-px TMDB copy drawn into an
+8×12 canvas, 2–5 ms on the TV (31 ms the first time). Reading pixels of a TMDB picture works with
+`crossOrigin = 'anonymous'` (TMDB sends `Access-Control-Allow-Origin: *`), and inside the widget it worked
+without it too.

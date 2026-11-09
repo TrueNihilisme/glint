@@ -47,13 +47,36 @@ const AB_CSS =
   '.ab-nobg .bg{display:none}' +
   '.ab-noshadow .thumb:before{display:none}' +
   '.ab-bgwc .bg{will-change:transform}' +
-  '.ab-noglass .thumb:after{display:none}';
+  '.ab-noglass .thumb:after{display:none}' +
+  '.ab-nopic .pic{display:none}';
+
+// A/B of switching between sections that are already built (menu focus, a key every 700 ms).
+async function sectionAB(press, send) {
+  const tv = document.getElementById('tv');
+  const variants = ['', 'ab-nobg'];
+  let dir = 'right';
+  for (let round = 1; round <= 3; round++) {
+    for (const v of variants) {
+      const cls = v ? [v] : [];
+      cls.forEach((c) => tv.classList.add(c));
+      await wait(800);
+      send('sections A/B ' + (v || 'colour') + ' #' + round, await run(press, [dir, dir, dir], 700, 2500));
+      cls.forEach((c) => tv.classList.remove(c));
+      dir = dir === 'right' ? 'left' : 'right';
+    }
+  }
+}
+
+function addAB() {
+  if (document.getElementById('ab-css')) return;
+  const st = document.createElement('style');
+  st.id = 'ab-css';
+  st.textContent = AB_CSS;
+  document.head.appendChild(st);
+}
 
 async function rowAB(press, send) {
   const tv = document.getElementById('tv');
-  const st = document.createElement('style');
-  st.textContent = AB_CSS;
-  document.head.appendChild(st);
   const variants = ['', 'ab-noglass', 'ab-nobg'];
   for (let round = 1; round <= 2; round++) {
     for (const v of variants) {
@@ -93,6 +116,41 @@ async function playFlow(press, send) {
   send('play: back', pick());
 }
 
+// GLINT_SELFTEST_MODE=color: can the TV read a poster's colour (canvas), and how long does it take?
+function colorOf(src, cors) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const img = new Image();
+    if (cors) img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const t1 = Date.now();
+      try {
+        const c = document.createElement('canvas');
+        c.width = 8; c.height = 12;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0, 8, 12);
+        const d = g.getImageData(0, 0, 8, 12).data;
+        let r = 0, gr = 0, b = 0;
+        for (let i = 0; i < d.length; i += 4) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; }
+        const n = d.length / 4;
+        resolve({ ok: true, rgb: [Math.round(r / n), Math.round(gr / n), Math.round(b / n)], loadMs: t1 - t0, readMs: Date.now() - t1 });
+      } catch (e) { resolve({ ok: false, err: String(e && e.name || e), loadMs: t1 - t0 }); }
+    };
+    img.onerror = () => resolve({ ok: false, err: 'load error', loadMs: Date.now() - t0 });
+    img.src = src;
+  });
+}
+
+async function colorProbe(send) {
+  const srcs = Array.prototype.slice.call(document.querySelectorAll('.card .pic')).slice(0, 6).map((p) =>
+    p.getAttribute('data-src') || String(p.style.backgroundImage).replace(/^url\(["']?|["']?\)$/g, ''));
+  for (let i = 0; i < srcs.length; i++) {
+    const small = srcs[i].replace(/\/t\/p\/w\d+\//, '/t/p/w92/');
+    send('color ' + i + ' cors', Object.assign({ src: small.slice(-40) }, await colorOf(small, true)));
+  }
+  if (srcs[0]) send('color 0 without cors', await colorOf(srcs[0].replace(/\/t\/p\/w\d+\//, '/t/p/w154/'), false));
+}
+
 export async function selftest(url, press, mode) {
   const send = (step, res) => {
     try {
@@ -111,15 +169,30 @@ export async function selftest(url, press, mode) {
     firstCard: cards[0] ? String(cards[0].style.backgroundImage).slice(0, 90) : null,
     ext: window.Glint && window.Glint.debug ? window.Glint.debug() : null,
   });
+  send('bg at start', ['bgA', 'bgB'].map((id) => document.getElementById(id).style.backgroundColor));
   await wait(4000);   // right after install/launch the TV is busy: numbers taken earlier were noise
   if (mode === 'play') { await playFlow(press, send); send('done', { mem: mem() }); return; }
+  if (mode === 'color') { await colorProbe(send); send('done', { mem: mem() }); return; }
   send('idle', await measure(2000));
-  send('hero: next title ×4', await run(press, ['right', 'right', 'right', 'right'], 500, 2500));
+  addAB();
+  for (let round = 1; round <= 2; round++) {
+    for (const v of ['', 'ab-nobg']) {
+      if (v) document.getElementById('tv').classList.add(v);
+      await wait(800);
+      send('hero ×4 ' + (v || 'colour') + ' #' + round, await run(press, ['right', 'right', 'right', 'right'], 500, 2500));
+      if (v) document.getElementById('tv').classList.remove(v);
+    }
+  }
   press('down');
   await wait(800);
   await rowAB(press, send);
   send('row 1 → row 2 (page scroll, background)', await run(press, ['down', 'right', 'right', 'right', 'right'], 300, 2000));
   send('back to menu, sections ×3', await run(press, ['back', 'right', 'right', 'right'], 700, 3200));
-  press('left'); press('left'); press('left');
-  send('done', { mem: mem(), totalMs: Date.now() - t0 });
+  await wait(1500);
+  // the same sections again: they are kept built, so this shows what is left besides building them
+  send('sections ×3 back (already built)', await run(press, ['left', 'left', 'left'], 700, 2500));
+  send('build times', window.glintTimes || []);
+  await sectionAB(press, send);
+  const bgNow = () => ['bgA', 'bgB'].map((id) => { const e = document.getElementById(id); return e.style.backgroundColor + (e.classList.contains('on') ? ' on' : ''); });
+  send('done', { mem: mem(), totalMs: Date.now() - t0, bg: bgNow() });
 }

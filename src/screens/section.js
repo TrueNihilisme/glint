@@ -1,6 +1,7 @@
 import { rowHTML, scrollTrack, loadPictures, styleOf, visibleCount } from '../ui/row.js';
 import { esc, $, $$, translateY } from '../ui/util.js';
 import { whenIdle } from '../idle.js';
+import { picOf } from '../ui/color.js';
 
 // A section of the top menu (Movies, Series, …): a hero at the top and rows below.
 // Going down, the page scrolls so the focused row sits under the menu; the menu itself never hides.
@@ -39,17 +40,29 @@ export function createSection(root, data, opts) {
     const k = liveAt; liveAt = -2; live(k);
   }
 
+  // The hero's text is updated in place: rebuilding it (buttons included) on every switch cost frames and the
+  // focused button had to be found again.
   function drawHero() {
     const it = heroes[hero];
     if (!it) return;
-    $('.hero-body', root).innerHTML =
-      '<h1' + (it.title.length > 22 ? ' class="long"' : '') + '>' + esc(it.title) + '</h1>' +
-      '<div class="meta">' + esc(heroMeta(it)) + '</div>' +
-      (it.desc ? '<div class="desc">' + esc(it.desc) + '</div>' : '') +
-      '<div class="btns"><span class="btn">Дивитися</span><span class="btn round">ⓘ</span></div>';
-    $$('.dots i', root).forEach((d, i) => { d.className = i === hero ? 'on' : ''; });
-    opts.bg.set(it.backdrop);
+    const body = $('.hero-body', page);
+    if (!body.firstChild) {
+      body.innerHTML = '<h1></h1><div class="meta"></div><div class="desc"></div>' +
+        '<div class="btns"><span class="btn">Дивитися</span><span class="btn round">ⓘ</span></div>';
+    }
+    const h1 = $('h1', body);
+    h1.textContent = it.title;
+    h1.className = it.title.length > 22 ? 'long' : '';
+    $('.meta', body).textContent = heroMeta(it);
+    const desc = $('.desc', body);
+    desc.textContent = it.desc || '';
+    desc.style.display = it.desc ? '' : 'none';
+    $$('.dots i', page).forEach((d, i) => { d.className = i === hero ? 'on' : ''; });
+    opts.bg.set(heroPhoto(it), true);
   }
+
+  // the hero shows its title's photo full-screen; rows below take the focused card's colour
+  function heroPhoto(it) { return it.backdrop || picOf(it); }
 
   // Zone positions are read once: reading offsetTop on every key press forces a layout pass.
   let geo = null;
@@ -94,10 +107,10 @@ export function createSection(root, data, opts) {
     zones.push({
       id: 'hero',
       dir: 'h',
-      items: () => $$('.hero .btn', root),
-      onFocus: () => { scrollTo('hero'); live(0); opts.bg.set(heroes[hero].backdrop); },
+      items: () => $$('.hero .btn', page),
+      onFocus: () => { scrollTo('hero'); live(0); opts.bg.set(heroPhoto(heroes[hero]), true); },
       // past the first / last button the hero switches to the previous / next title, as on Apple TV
-      onEdge: (step) => { hero = (hero + step + heroes.length) % heroes.length; drawHero(); opts.focus.refresh(); },
+      onEdge: (step) => { hero = (hero + step + heroes.length) % heroes.length; drawHero(); },
       onEnter: () => opts.openTitle(heroes[hero]),
     });
   }
@@ -113,24 +126,23 @@ export function createSection(root, data, opts) {
       onFocus: (i) => {
         buildMore(ri + 3);    // the rows just below must exist before the page scrolls to them
         const sec = secOf();
-        const deep = scrollTo(id);
         live(ri);
         scrollTrack(sec, i, tracks[id], styleOf(row));
         // the row below comes into view next: start its first pictures now
         const below = $('[data-zone="r' + (ri + 1) + '"]', page);
         if (below) loadPictures(below, 0, visibleCount(styleOf(data.rows[ri + 1])) + 1);
-        // Below the hero the background is dimmed by 84%: changing the photo there decoded a large picture on
-        // every key press for nothing (row → row fell to ~4 fps on the TV). It changes only in the hero, or on
-        // a page without one.
-        if (!deep) opts.bg.set(heroes.length ? heroes[hero].backdrop : row.items[i].backdrop);
-        else if (!heroes.length) opts.bg.set(row.items[i].backdrop);
+        // below the hero the background takes the focused card's colour (a photo here took row → row down to
+        // ~4 fps on the TV); in the first row, while the hero is still on screen, it keeps the hero's photo
+        const deep = scrollTo(id);
+        if (deep || !heroes.length) opts.bg.set(picOf(row.items[i]));
+        else opts.bg.set(heroPhoto(heroes[hero]), true);
       },
       onEnter: (i) => opts.openTitle(row.items[i]),
     });
   });
 
   drawHero();
-  if (!heroes.length && data.rows[0] && data.rows[0].items[0]) opts.bg.set(data.rows[0].items[0].backdrop);
+  if (!heroes.length && data.rows[0] && data.rows[0].items[0]) opts.bg.set(picOf(data.rows[0].items[0]));
   // first screen: the first two rows' visible cards, one row after another so decoding is spread out
   data.rows.slice(0, 2).forEach((row, ri) => {
     setTimeout(() => loadPictures($('[data-zone="r' + ri + '"]', page), 0, visibleCount(styleOf(row)) + 1), ri * 400);
@@ -147,5 +159,16 @@ export function createSection(root, data, opts) {
     whenIdle(ahead, 600);
   };
   whenIdle(ahead, 1500);
-  return { zones };
+  // the hero titles' photos, fetched ahead while the remote is quiet
+  whenIdle(() => heroes.forEach((it) => {
+    if (it.backdrop) new Image().src = String(it.backdrop).replace('/t/p/w1280/', '/t/p/w780/').replace('/t/p/original/', '/t/p/w780/');
+  }), 2500);
+
+  // Sections are kept and shown again when the viewer comes back (see main.js); restore() puts back what lives
+  // outside the page: the background and the dimmed look below the hero.
+  function restore() {
+    opts.onDeep(lastY < 0);
+    if (heroes.length && !(lastY < 0)) opts.bg.set(heroPhoto(heroes[hero]), true);
+  }
+  return { zones, page, restore };
 }

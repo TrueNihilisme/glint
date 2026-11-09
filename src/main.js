@@ -12,6 +12,7 @@ import { demoSection } from './data/stub.js';
 import { esc, $, $$ } from './ui/util.js';
 import { selftest } from './selftest.js';
 import { markKey } from './idle.js';
+import { pictureColor } from './ui/color.js';
 
 /* global GLINT_VERSION, GLINT_PRESET, GLINT_SELFTEST, GLINT_SELFTEST_MODE */
 window.Glint = { version: GLINT_VERSION, register, debug: () => debugInfo() };
@@ -37,18 +38,22 @@ tv.innerHTML =
 // Background: two layers that cross-fade. After the fade the hidden one gets visibility:hidden —
 // a full-screen layer at opacity 0 is still composited every frame, and on a Tizen 4 TV that alone
 // took a row of cards from ~56 to ~42 fps (self-test A/B, 2026-11-09).
-// A new background is applied only once the focus has rested for 300 ms: decoding a photo on every
-// key press while walking a row took it down to ~8 fps on the TV with real TMDB backdrops.
+// The background shows the hero title's photo, and below the hero a colour taken from the focused card (see
+// ui/color.js): changing a full-screen photo while walking rows took them down to ~4 fps on the TV.
+// A change is applied only once the focus has rested for 300 ms.
 const bg = (() => {
   let front = $('#bgA');
   let back = $('#bgB');
   let cur = '';
+  let want = '';
   let timer = 0;
   let wait = 0;
-  function apply(url) {
-    cur = url;
+  function apply(key, image, color) {
+    if (key === cur) return;
+    cur = key;
     clearTimeout(timer);
-    back.style.backgroundImage = 'url("' + String(url).replace(/["\\]/g, '') + '")';
+    back.style.backgroundImage = image ? 'url("' + image.replace(/["\\]/g, '') + '")' : 'none';
+    back.style.backgroundColor = color || '';
     back.style.visibility = 'visible';
     back.classList.add('on');
     front.classList.remove('on');
@@ -57,13 +62,18 @@ const bg = (() => {
     timer = setTimeout(() => { old.style.visibility = 'hidden'; }, 750);
   }
   return {
-    set(url) {
+    // url: a picture; photo = true shows the picture itself (the hero, a title's page), otherwise its colour
+    set(url, photo) {
+      url = String(url || '');
+      if (photo) url = url.replace('/t/p/w1280/', '/t/p/w780/').replace('/t/p/original/', '/t/p/w780/');
+      const key = (photo ? 'photo ' : 'colour ') + url;
+      if (!url || key === want) return;   // the same picture again must not cancel the change already on its way
       clearTimeout(wait);
-      // the background sits under a shade and often a dim layer: a 780-px TMDB copy is plenty, and a third of
-      // the pixels of the 1280-px one to decode
-      url = String(url || '').replace('/t/p/w1280/', '/t/p/w780/').replace('/t/p/original/', '/t/p/w780/');
-      if (!url || url === cur) return;
-      wait = setTimeout(() => apply(url), cur ? 300 : 0);
+      want = key;
+      wait = setTimeout(() => {
+        if (photo) { apply(key, url, ''); return; }
+        pictureColor(url).then((rgb) => { if (want === key && rgb) apply(key, '', 'rgb(' + rgb.join(',') + ')'); });
+      }, cur ? 300 : 0);
     },
   };
 })();
@@ -106,7 +116,16 @@ function menuEntries() {
 
 let current = null;         // key of the open entry
 const sub = {};             // entry key → chosen item index
+let menuSig = '';
 function drawMenu() {
+  // only the «selected» mark changes while walking the menu; the tabs are rebuilt only when the list changes
+  const entries = menuEntries();
+  const sig = entries.map((m) => m.key + '|' + m.title + '|' + (m.items ? m.items.length : 0)).join(',');
+  if (sig === menuSig) {
+    $$('.menu .tab').forEach((el, i) => el.classList.toggle('sel', !!entries[i] && entries[i].key === current));
+    return;
+  }
+  menuSig = sig;
   $('.menu').innerHTML = '<div class="pill">' +
     menuEntries().map((m) => '<span class="tab' + (m.key === current ? ' sel' : '') + '">' + esc(m.title) +
       (m.items && m.items.length > 1 ? '<span class="chev">▾</span>' : '') + '</span>').join('') +
@@ -172,6 +191,7 @@ function updateDrop() {
 
 // ── pages: sections (rows from all extensions) and extension menu items (rows from that extension) ──
 const cache = {};
+const built = {};   // entry → a section already built (its page element, zones, restore())
 function sectionData(id) {
   const withRows = extensions().filter((e) => typeof e.rows === 'function');
   return Promise.all(withRows.map((e) =>
@@ -229,11 +249,29 @@ function openEntry(key, focusContent) {
     // «Продовжити перегляд» and «Моє» are drawn fresh every time, on top of the (cached) extension rows
     const lib = m.section ? libraryRows(m.id) : [];
     if (lib.length) data = Object.assign({}, data, { rows: lib.concat(data.demo ? [] : data.rows), note: data.demo ? '' : data.note });
-    const s = createSection($('#section'), data, {
-      focus, bg, toast,
-      onDeep: (deep) => tv.classList.toggle('deep', deep),
-      openTitle,
-    });
+    // A section already built is shown again as it was (rows, scroll, loaded pictures) instead of being rebuilt:
+    // building a hero and rows on every visit kept switching sections at ~20 fps on the TV.
+    const libSig = lib.map((r) => r.title + ':' + r.items.map((i) => i.id).join(',')).join('|');
+    const domKey = cacheKey + '@' + libSig;
+    const root = $('#section');
+    let s = data.demo ? null : built[domKey];
+    if (s) {
+      if (root.firstChild !== s.page) {
+        while (root.firstChild) root.removeChild(root.firstChild);
+        root.appendChild(s.page);
+      }
+      s.restore();
+    } else {
+      const t0 = Date.now();
+      s = createSection(root, data, {
+        focus, bg, toast,
+        onDeep: (deep) => tv.classList.toggle('deep', deep),
+        openTitle,
+      });
+      if (!data.demo) built[domKey] = s;
+      // self-test build only: how long building a section takes (dropped from a normal build)
+      if (GLINT_SELFTEST) (window.glintTimes = window.glintTimes || []).push(key + ' build ' + (Date.now() - t0) + ' ms, rows ' + data.rows.length);
+    }
     pageZones = s.zones;
     if (settingsOpen || titleOpen) return;
     // the very first page opens with the focus on its content, later ones keep it where it is

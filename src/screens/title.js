@@ -3,6 +3,7 @@ import { load, save } from '../store.js';
 import { loadPictures } from '../ui/row.js';
 import { esc, $, $$, translateY } from '../ui/util.js';
 import { touch, isFav, toggleFav } from '../library.js';
+import { picOf } from '../ui/color.js';
 
 // The title page: what the row card knew at once, then details from the first extension that has them.
 // For series: seasons, ranges of 20 when a season is longer, episodes; it opens on the next unwatched one.
@@ -269,14 +270,14 @@ export function createTitle(root, item, deps) {
     },
   ];
 
-  deps.bg.set(item.backdrop);
+  deps.bg.set(item.backdrop || picOf(item), true);
   draw();
   firstAnswer('details', [item]).then((got) => {
     d = got || { desc: item.desc || '' };
     // what sources need to find the title: original name, year, IMDb id, language
     ['original', 'imdb', 'lang'].forEach((k) => { if (d[k]) item[k] = d[k]; });
     if (d.year) item.year = d.year;
-    if (d.backdrop) deps.bg.set(d.backdrop);
+    if (d.backdrop) deps.bg.set(d.backdrop, true);
     draw();
     const seasons = seriesSeasons();
     if (seasons.length) {
