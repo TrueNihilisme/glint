@@ -10,7 +10,7 @@ import { ask } from '../ui/input.js';
 //   rows(section, ctx) → Promise<[{ title, style: 'poster'|'wide', ai?, items: [Item] }]>
 //                         section: 'movies' | 'series' | 'cartoons' | 'anime'
 //   Item: { id, title, card, backdrop, year?, genre?, meta?, desc?, tmdb?: { id, type } }
-// ctx: { get(key), set(key, value), getJSON(url, ms?), request(method, url, body?, headers?, ms?), ask(title, value?, placeholder?), toast(text) }
+// ctx: { get(key), set(key, value), getJSON(url, ms?), request(method, url, body?, headers?, ms?), ask(title, value?, placeholder?, { secret }?), toast(text) }
 //
 // An extension is someone else's code inside the app — the settings page shows its address, and it
 // runs only while it is switched on. Extension files must run on Chromium 56 as they are (ES5 is safest).
@@ -124,7 +124,7 @@ export function contextFor(ext) {
     set: (key, value) => setSettingValue(ext, key, value),
     getJSON,
     request,
-    ask: (title, value, placeholder) => ask(title, value, placeholder),
+    ask: (title, value, placeholder, opts) => ask(title, value, placeholder, opts),
     toast: (t) => toastFn(t),
   };
 }

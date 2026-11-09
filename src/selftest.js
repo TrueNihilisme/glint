@@ -1,3 +1,4 @@
+import { askKey } from './ui/input.js';
 // Self-test for the TV: drives the remote by itself and measures frame times, then POSTs the numbers.
 // Built in only with `GLINT_SELFTEST=<report url> npm run tv`; a normal build drops this code entirely.
 // The report url gets text/plain JSON: {ev:'glint-selftest', step, res}.
@@ -151,6 +152,47 @@ async function colorProbe(send) {
   if (srcs[0]) send('color 0 without cors', await colorOf(srcs[0].replace(/\/t\/p\/w\d+\//, '/t/p/w154/'), false));
 }
 
+// GLINT_SELFTEST_MODE=keyboard: open the search, walk the on-screen keyboard to type a word, measure, press Done
+async function keyboardFlow(press, send) {
+  const key = (code) => askKey({ keyCode: code });
+  const focused = () => document.querySelector('.kb-key.focus');
+  press('up');                                         // hero → menu
+  await wait(400);
+  const onLens = () => { const f = document.querySelector('.menu .tab.focus'); return f && f.getAttribute('aria-label') === 'Пошук'; };
+  for (let i = 0; i < 12 && !onLens(); i++) { press('right'); await wait(150); }
+  press('enter');
+  await wait(800);
+  send('keyboard open', { open: !!document.querySelector('.ask .kb'), keys: document.querySelectorAll('.kb-key').length });
+  // walk to each letter: rows first, then along the row
+  const typeWord = async (word) => {
+    for (const ch of word) {
+      for (let guard = 0; guard < 40; guard++) {
+        const f = focused();
+        const target = Array.prototype.slice.call(document.querySelectorAll('.kb-key')).find((k) => k.textContent === ch);
+        if (!f || !target) return false;
+        const fr = +f.getAttribute('data-r'); const tr = +target.getAttribute('data-r');
+        if (fr !== tr) { key(fr < tr ? 40 : 38); await wait(120); continue; }
+        const fc = +f.getAttribute('data-c'); const tc = +target.getAttribute('data-c');
+        if (fc !== tc) { key(fc < tc ? 39 : 37); await wait(120); continue; }
+        key(13); await wait(150); break;
+      }
+    }
+    return true;
+  };
+  const pending = measure(6000);
+  const ok = await typeWord('дюна');
+  send('keyboard: typed with the remote (fps while walking keys)', Object.assign({ ok, text: (document.querySelector('.kb-text') || {}).textContent }, await pending));
+  // to Done: bottom row, last key
+  for (let i = 0; i < 7; i++) { key(40); await wait(100); }
+  for (let i = 0; i < 6; i++) { key(39); await wait(100); }
+  send('keyboard: on', { key: (focused() || {}).textContent });
+  key(13);
+  await wait(3000);
+  send('keyboard: after Done', { open: !!document.querySelector('.ask'), toast: (document.querySelector('.toast.on span') || {}).textContent || '',
+    rows: Array.prototype.slice.call(document.querySelectorAll('#section .row h2')).map((h) => h.textContent).slice(0, 3) });
+  press('back');
+}
+
 export async function selftest(url, press, mode) {
   const send = (step, res) => {
     try {
@@ -173,6 +215,7 @@ export async function selftest(url, press, mode) {
   await wait(4000);   // right after install/launch the TV is busy: numbers taken earlier were noise
   if (mode === 'play') { await playFlow(press, send); send('done', { mem: mem() }); return; }
   if (mode === 'color') { await colorProbe(send); send('done', { mem: mem() }); return; }
+  if (mode === 'keyboard') { await keyboardFlow(press, send); send('done', { mem: mem() }); return; }
   send('idle', await measure(2000));
   addAB();
   for (let round = 1; round <= 2; round++) {

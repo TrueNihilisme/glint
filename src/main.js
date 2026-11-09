@@ -4,7 +4,7 @@ import { createSection } from './screens/section.js';
 import { createSettings } from './screens/settings.js';
 import { createTitle } from './screens/title.js';
 import { createPlayer } from './player.js';
-import { ask } from './ui/input.js';
+import { ask, askKey } from './ui/input.js';
 import { libraryRows, sectionFor } from './library.js';
 import { register, loadExtensions, extensions, contextFor, applyPreset, setToast, problem, debugInfo } from './ext/registry.js';
 import { load } from './store.js';
@@ -387,7 +387,7 @@ function press(a) {
   if (!settingsOpen && !titleOpen) updateDrop();
 }
 document.addEventListener('keydown', (e) => {
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;   // the prompt handles its own keys
+  if (askKey(e)) { e.preventDefault(); markKey(); return; }   // an open prompt (own on-screen keyboard) takes every key
   const a = KEY[e.keyCode];
   if (!a) return;
   e.preventDefault();

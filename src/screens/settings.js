@@ -71,9 +71,11 @@ export function createSettings(root, deps) {
       if (f.type === 'toggle') {
         out.push({ label: f.title, sw: !!v, run: () => { setSettingValue(ext, f.key, !v); deps.toast('Застосовую…'); deps.reload(); } });
       } else {
+        // a password (type 'password', or a key that says so) is shown as dots, here and while typing
+        const secret = f.type === 'password' || /pass|pin/i.test(f.key);
         out.push({
-          label: f.title, value: v || f.placeholder || '—',
-          run: () => ask(f.title, v || '', f.placeholder).then((t) => {
+          label: f.title, value: secret ? (v ? '••••••' : '—') : (v || f.placeholder || '—'),
+          run: () => ask(f.title, v || '', f.placeholder, { secret }).then((t) => {
             if (t == null) { deps.focus.refresh(); return; }
             setSettingValue(ext, f.key, t);
             deps.toast('Застосовую…');
