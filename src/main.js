@@ -2,6 +2,7 @@ import { createFocus } from './focus.js';
 import { KEY, registerMediaKeys, exitApp, fit } from './platform.js';
 import { createSection } from './screens/section.js';
 import { createSettings } from './screens/settings.js';
+import { createTitle } from './screens/title.js';
 import { register, loadExtensions, extensions, contextFor, applyPreset, setToast, problem, debugInfo } from './ext/registry.js';
 import { load } from './store.js';
 import { demoSection } from './data/stub.js';
@@ -26,7 +27,7 @@ const tv = document.getElementById('tv');
 tv.innerHTML =
   '<div class="bg" id="bgA"></div><div class="bg" id="bgB"></div><div class="shade"></div><div class="dim"></div>' +
   '<div id="section"></div><div class="topshade"></div><nav class="menu"></nav>' +
-  '<div id="settings"></div><div class="toast"><span></span></div>';
+  '<div id="title"></div><div id="settings"></div><div class="toast"><span></span></div>';
 
 // Background: two layers that cross-fade. After the fade the hidden one gets visibility:hidden —
 // a full-screen layer at opacity 0 is still composited every frame, and on a Tizen 4 TV that alone
@@ -141,7 +142,7 @@ function openSection(id) {
     const s = createSection($('#section'), data, {
       focus, bg, toast,
       onDeep: (deep) => tv.classList.toggle('deep', deep),
-      openTitle: (it) => toast('«' + it.title + '» — картка на наступному етапі'),
+      openTitle,
     });
     sectionZones = s.zones;
     if (settingsOpen) return;
@@ -153,6 +154,27 @@ function openSection(id) {
 }
 let firstOpen = true;
 let ready = false;
+
+// ── title page ──
+let titleOpen = false;
+let beforeTitle = null;
+function openTitle(it) {
+  beforeTitle = focus.zone();
+  titleOpen = true;
+  tv.classList.add('ov');
+  const root = $('#title');
+  root.classList.add('on');
+  const t = createTitle(root, it, { focus, bg, toast });
+  focus.set(t.zones, 'tbtn');
+}
+function closeTitle() {
+  titleOpen = false;
+  tv.classList.remove('ov');
+  const root = $('#title');
+  root.classList.remove('on');
+  root.innerHTML = '';
+  focus.set([menuZone].concat(sectionZones), beforeTitle || 'menu');
+}
 
 // ── settings ──
 let settingsOpen = false;
@@ -173,6 +195,7 @@ function press(a) {
   if (a === 'enter') { focus.enter(); return; }
   if (a === 'back') {
     if (settingsOpen) { settings.back(); return; }
+    if (titleOpen) { closeTitle(); return; }
     if (focus.zone() !== 'menu') { focus.focus('menu', visibleSections().findIndex((s) => s.id === current)); return; }
     exitApp();
     return;
