@@ -40,6 +40,31 @@ async function run(press, keys, every, ms) {
   return pending;
 }
 
+// A/B variants of the row animation, switched by a class on #tv; injected only in the self-test build.
+const AB_CSS =
+  '.ab-nowc .thumb{will-change:auto}.ab-nowc .track{will-change:auto}' +
+  '.ab-noshade .shade,.ab-noshade .dim,.ab-noshade .topshade{display:none}' +
+  '.ab-nobg .bg{display:none}' +
+  '.ab-noshadow .thumb:before{display:none}';
+
+async function rowAB(press, send) {
+  const tv = document.getElementById('tv');
+  const st = document.createElement('style');
+  st.textContent = AB_CSS;
+  document.head.appendChild(st);
+  const variants = ['', 'ab-nobg'];
+  for (let round = 1; round <= 2; round++) {
+    for (const v of variants) {
+      if (v) tv.classList.add(v);
+      for (let k = 0; k < 10; k++) press('left');           // back to the row start, unmeasured
+      await wait(800);
+      const r = await run(press, Array(10).fill('right'), 250, 3000);
+      send('row A/B ' + (v || 'base') + ' #' + round, r);
+      if (v) tv.classList.remove(v);
+    }
+  }
+}
+
 export async function selftest(url, press) {
   const send = (step, res) => {
     try {
@@ -51,12 +76,12 @@ export async function selftest(url, press) {
   };
   const t0 = Date.now();
   send('start', { ua: navigator.userAgent, mem: mem(), tizen: typeof window.tizen, avplay: !!(window.webapis && window.webapis.avplay) });
-  await wait(1500);
+  await wait(4000);   // right after install/launch the TV is busy: numbers taken earlier were noise
   send('idle', await measure(2000));
   send('hero: next title ×4', await run(press, ['right', 'right', 'right', 'right'], 500, 2500));
   press('down');
   await wait(800);
-  send('row 1: right ×10', await run(press, Array(10).fill('right'), 250, 3000));
+  await rowAB(press, send);
   send('row 1 → row 2 (page scroll, background)', await run(press, ['down', 'right', 'right', 'right', 'right'], 300, 2000));
   send('back to menu, sections ×3', await run(press, ['back', 'right', 'right', 'right'], 700, 3200));
   press('left'); press('left'); press('left');

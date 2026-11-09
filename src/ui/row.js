@@ -16,12 +16,15 @@ export function rowHTML(id, row) {
 
 // Keep the focused card on screen: scroll only when it would leave the visible part of the row.
 export function scrollTrack(section, i, state) {
-  const track = section.querySelector('.track');
   let first = state.first || 0;
   if (i > first + VISIBLE - 2) first = i - (VISIBLE - 2);
   if (i < first) first = i;
-  state.first = Math.max(0, first);
-  const v = 'translate3d(' + (-state.first * STEP) + 'px,0,0)';
+  first = Math.max(0, first);
+  if (first === state.first && state.applied) return;   // nothing moves: no style write
+  state.first = first;
+  state.applied = true;
+  const track = state.track || (state.track = section.querySelector('.track'));
+  const v = 'translate3d(' + (-first * STEP) + 'px,0,0)';
   track.style.webkitTransform = v;
   track.style.transform = v;
 }

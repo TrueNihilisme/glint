@@ -10,19 +10,22 @@ export function createFocus() {
   let zones = [];
   let zi = 0;
   const pos = {};
+  let focused = null;   // the element with .focus — kept here instead of querying the DOM each press
 
   const cur = () => zones[zi];
   const items = (z) => (z ? z.items() : []);
 
   function apply() {
-    const prev = document.querySelector('.focus');
-    if (prev) prev.classList.remove('focus');
     const z = cur();
     const list = items(z);
     if (!list.length) return;
     const i = Math.min(pos[z.id] || 0, list.length - 1);
     pos[z.id] = i;
-    list[i].classList.add('focus');
+    if (focused !== list[i]) {
+      if (focused) focused.classList.remove('focus');
+      focused = list[i];
+      focused.classList.add('focus');
+    }
     if (z.onFocus) z.onFocus(i, list[i]);
   }
 

@@ -28,19 +28,26 @@ tv.innerHTML =
   '<span class="tab icon" aria-label="Налаштування">' + GEAR + '</span></div></nav>' +
   '<div class="toast"><span></span></div>';
 
-// Background: two layers that cross-fade (opacity only — measured smooth on a Tizen 4 TV).
+// Background: two layers that cross-fade. After the fade the hidden one gets visibility:hidden —
+// a full-screen layer at opacity 0 is still composited every frame, and on a Tizen 4 TV that alone
+// took a row of cards from ~56 to ~42 fps (self-test A/B, 2026-11-09).
 const bg = (() => {
   let front = $('#bgA');
   let back = $('#bgB');
   let cur = '';
+  let timer = 0;
   return {
     set(url) {
       if (!url || url === cur) return;
       cur = url;
+      clearTimeout(timer);
       back.style.backgroundImage = 'url(' + url + ')';
+      back.style.visibility = 'visible';
       back.classList.add('on');
       front.classList.remove('on');
       const t = front; front = back; back = t;
+      const old = back;
+      timer = setTimeout(() => { old.style.visibility = 'hidden'; }, 750);
     },
   };
 })();

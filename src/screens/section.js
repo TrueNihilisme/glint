@@ -28,16 +28,25 @@ export function createSection(root, kind, opts) {
     opts.bg.set(it.backdrop);
   }
 
+  // Zone positions are read once: reading offsetTop on every key press forces a layout pass,
+  // which showed up as random 200 ms frames on the TV.
+  let geo = null;
+  let lastY = null;
   function scrollTo(zone) {
+    if (!geo) {
+      geo = {};
+      $$('[data-zone]', page).forEach((s) => { geo[s.getAttribute('data-zone')] = { top: s.offsetTop, bottom: s.offsetTop + s.offsetHeight }; });
+    }
     let y = 0;
     if (zone !== 'hero') {
-      const sec = $('[data-zone="' + zone + '"]', page);
-      const top = sec.offsetTop;
-      const bottom = top + sec.offsetHeight;
-      y = zone === 'r0' && bottom <= 1060 ? 0 : -(top - 200);
+      const g = geo[zone];
+      y = zone === 'r0' && g.bottom <= 1060 ? 0 : -(g.top - 200);
     }
-    translateY(page, y);
-    opts.onDeep(y < 0);
+    if (y !== lastY) {
+      lastY = y;
+      translateY(page, y);
+      opts.onDeep(y < 0);
+    }
     return y < 0;
   }
 

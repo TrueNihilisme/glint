@@ -49,8 +49,24 @@ Rule: animate only `transform` and `opacity`, never `box-shadow`; size pictures 
 | Row 1 → row 2 (page scroll, background change) | 49.5 | 41 ms | 10 |
 | Back to the menu, switching sections ×3 | 59.2 | 32 ms | 8 |
 
-JS heap 10 MB. The row is the weak spot (the probe's bare row did 48.7): next suspects are the caption
-moving with the card and the track's own transition running at the same time as the card's.
+JS heap 10 MB. Single runs are noisy (the same variant gave 26 and 48 fps), so every comparison below is an
+A/B inside one run, two rounds each, started 20 s after install.
+
+**What actually slowed the row: the background layers.** Hiding the two full-screen background layers took
+the row from ~42 to ~56 fps; nothing else mattered as much:
+
+| Row variant (A/B, same run) | fps, round 1 / 2 |
+|---|---|
+| as built (two `.bg` layers, the hidden one at `opacity: 0`) | 42.8 / 42.5 |
+| background layers off | 54.3 / 57.7 |
+| no `will-change` on cards | 26.2 / 35.8 — worse |
+| shade/dim/topshade off | 47.6 / 43.2 |
+| card shadow layer off | 43.6 / 51.1 |
+| caching layout reads in JS (`offsetTop` once) | no visible change |
+
+A layer at `opacity: 0` is still composited every frame. Fix: after the cross-fade the old background gets
+`visibility: hidden`, and `.bg` has no permanent `will-change`. After the fix: **row 49.7 / 55.2 fps**
+(background off: 53.6 / 53.4). Still to improve: row → row with a background change (37.5 fps).
 
 ## JavaScript
 

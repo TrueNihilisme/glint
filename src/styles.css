@@ -9,7 +9,7 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 
 /* background: two cross-fading layers, a shade for legibility, a dim layer once the page scrolls down */
 .bg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background-size: cover; background-position: center;
-  opacity: 0; transition: opacity .7s ease; will-change: opacity; }
+  opacity: 0; visibility: hidden; transition: opacity .7s ease; }
 .bg.on { opacity: 1; }
 .shade { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background:
   linear-gradient(to right, rgba(8,8,10,0.86) 0%, rgba(8,8,10,0.45) 38%, rgba(8,8,10,0) 66%),
@@ -64,8 +64,8 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
   box-shadow: 0 30px 60px rgba(0,0,0,0.7); opacity: 0; transition: opacity .25s ease; }
 .card.focus .thumb { transform: scale(1.1); }
 .card.focus .thumb:before { opacity: 1; }
-.cap { margin-top: 18px; transition: transform .25s ease; }
-.card.focus .cap { transform: translateY(14px); }
+/* the caption stays put: moving it with the card cost ~5 fps on the TV (self-test 2026-11-09) */
+.cap { margin-top: 30px; }
 .cap b { display: block; font-size: 24px; font-weight: 600; color: rgba(245,245,247,0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cap span { display: block; margin-top: 4px; font-size: 21px; color: rgba(235,235,245,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
