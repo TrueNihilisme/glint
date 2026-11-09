@@ -3,9 +3,9 @@
 A TV front-end for Samsung Tizen 4 (2018 TVs, Chromium 56) with an Apple-TV-like look:
 a menu that is always on screen, a hero, rows of cards, a title page with seasons and episodes.
 
-**Status: early skeleton.** The menu, sections, rows and focus work on placeholder data; the extension
-system, title page and player come next. Measurements that shaped it are in
-[`docs/CHROMIUM56.md`](docs/CHROMIUM56.md).
+**Status: early, but usable.** Sections with rows, a title page with seasons and episodes, a player
+(AVPlay), search, «Continue watching» and «My list», menus from extensions (TV, Music), settings with
+extensions by URL. Measurements that shaped it are in [`docs/CHROMIUM56.md`](docs/CHROMIUM56.md).
 
 ## The idea
 
@@ -16,9 +16,19 @@ system, title page and player come next. Measurements that shaped it are in
 - **Built for the TV first:** one bundle for Chromium 56, only `transform`/`opacity` animations,
   pictures at the size they are shown, AVPlay for playback.
 
-Planned extensions (in [lampac-extra](https://github.com/TrueNihilisme/lampac-extra)):
-a Lampac server (sources, seasons, voices, RCH) and [lampac-mcp](https://github.com/TrueNihilisme/lampac-mcp)
-(rows for the sections).
+Extensions in [lampac-extra/glint](https://github.com/TrueNihilisme/lampac-extra/tree/main/glint) (load them by their
+jsDelivr address, e.g. `https://cdn.jsdelivr.net/gh/TrueNihilisme/lampac-extra@main/glint/tmdb.js`):
+
+| File | Gives |
+|---|---|
+| `tmdb.js` | rows for every section (trends, actor of the week, genres, studios), details, seasons, episodes, search — with a TMDB key or through a [lampac-mcp](https://github.com/TrueNihilisme/lampac-mcp) server that keeps the key |
+| `lampac-mcp.js` | the AI-picked rows a lampac-mcp server keeps |
+| `lampac.js` | sources from a Lampac server: online sources, voices, seasons, episodes, RCH |
+| `iptv.js` | «TV → IPTV» from an M3U playlist, with an optional programme guide |
+| `navidrome.js` | «Music → Navidrome»: albums and playlists as queues |
+
+The extension API is described at the top of [`src/ext/registry.js`](src/ext/registry.js),
+[`src/screens/title.js`](src/screens/title.js) and [`src/main.js`](src/main.js) (menus and pages).
 
 ## Build and install
 

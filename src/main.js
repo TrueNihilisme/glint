@@ -5,6 +5,7 @@ import { createSettings } from './screens/settings.js';
 import { createTitle } from './screens/title.js';
 import { createPlayer } from './player.js';
 import { ask } from './ui/input.js';
+import { libraryRows, sectionFor } from './library.js';
 import { register, loadExtensions, extensions, contextFor, applyPreset, setToast, problem, debugInfo } from './ext/registry.js';
 import { load } from './store.js';
 import { demoSection } from './data/stub.js';
@@ -215,6 +216,9 @@ function openEntry(key, focusContent) {
   (cache[cacheKey] ? Promise.resolve(cache[cacheKey]) : entryData(m)).then((data) => {
     if (t !== ticket) return;   // another page was chosen meanwhile
     if (!data.demo && data.rows.length) cache[cacheKey] = data;   // demo / empty is never cached
+    // «Продовжити перегляд» and «Моє» are drawn fresh every time, on top of the (cached) extension rows
+    const lib = m.section ? libraryRows(m.id) : [];
+    if (lib.length) data = Object.assign({}, data, { rows: lib.concat(data.demo ? [] : data.rows), note: data.demo ? '' : data.note });
     const s = createSection($('#section'), data, {
       focus, bg, toast,
       onDeep: (deep) => tv.classList.toggle('deep', deep),
@@ -223,7 +227,8 @@ function openEntry(key, focusContent) {
     pageZones = s.zones;
     if (settingsOpen || titleOpen) return;
     // the very first page opens with the focus on its content, later ones keep it where it is
-    const start = (firstOpen || focusContent) && pageZones[0] ? pageZones[0].id : focus.zone() || 'menu';
+    const start = reopenFocus || ((firstOpen || focusContent) && pageZones[0] ? pageZones[0].id : focus.zone() || 'menu');
+    reopenFocus = null;
     firstOpen = false;
     focus.set([menuZone, dropZone].concat(pageZones), start);
     updateDrop();
@@ -231,6 +236,7 @@ function openEntry(key, focusContent) {
 }
 let firstOpen = true;
 let ready = false;
+let reopenFocus = null;
 
 // ── search: every extension with search(query, ctx) → rows ──
 function openSearch() {
@@ -281,7 +287,7 @@ function openTitle(it) {
   tv.classList.add('ov');
   const root = $('#title');
   root.classList.add('on');
-  const t = createTitle(root, it, { focus, bg, toast, player });
+  const t = createTitle(root, it, { focus, bg, toast, player, section: sectionFor(it, current) });
   focus.set(t.zones, 'tbtn');
 }
 function closeTitle() {
@@ -290,7 +296,13 @@ function closeTitle() {
   const root = $('#title');
   root.classList.remove('on');
   root.innerHTML = '';
-  focus.set([menuZone, dropZone].concat(pageZones), beforeTitle || 'menu');
+  // draw the page again: «Продовжити перегляд» / «Моє» may have changed while the title was open
+  if (current && current !== 'search') {
+    reopenFocus = beforeTitle || 'menu';
+    const key = current;
+    current = null;
+    openEntry(key);
+  } else focus.set([menuZone, dropZone].concat(pageZones), beforeTitle || 'menu');
 }
 
 // ── settings ──

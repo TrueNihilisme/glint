@@ -2,6 +2,7 @@ import { extensions, contextFor, problem } from '../ext/registry.js';
 import { load, save } from '../store.js';
 import { loadPictures } from '../ui/row.js';
 import { esc, $, $$, translateY } from '../ui/util.js';
+import { touch, isFav, toggleFav } from '../library.js';
 
 // The title page: what the row card knew at once, then details from the first extension that has them.
 // For series: seasons, ranges of 20 when a season is longer, episodes; it opens on the next unwatched one.
@@ -14,7 +15,7 @@ import { esc, $, $$, translateY } from '../ui/util.js';
 //   sources(item, ctx)          → Promise<[{ id, name, note? }]>
 //   play(item, sourceId, { season, episode, voice }, ctx) → Promise<{ url, title?, voices?: [name], voice? }>
 //
-// deps: { focus, bg, toast, player }
+// deps: { focus, bg, toast, player, section }
 
 const RANGE = 20;
 
@@ -80,7 +81,7 @@ export function createTitle(root, item, deps) {
         '<h1' + (item.title.length > 22 ? ' class="long"' : '') + '>' + esc(item.title) + '</h1>' +
         '<div class="meta">' + esc(metaLine(item, d)) + '</div>' +
         '<div class="desc">' + esc((d && d.desc) || item.desc || (d ? '' : 'Завантаження…')) + '</div>' +
-        '<div class="btns"><span class="btn">' + esc(watchLabel()) + '</span><span class="btn round">+</span></div>' +
+        '<div class="btns"><span class="btn">' + esc(watchLabel()) + '</span><span class="btn round">' + (isFav(item.id) ? '✓' : '+') + '</span></div>' +
       '</div>' +
       (d && ((d.cast && d.cast.length) || d.director) ? '<div class="t-side">' +
         (d.cast && d.cast.length ? '<p><span>У ролях</span><br>' + esc(d.cast.slice(0, 4).join(', ')) + '</p>' : '') +
@@ -175,6 +176,7 @@ export function createTitle(root, item, deps) {
       .then((r) => {
         if (!r || !r.url) { deps.toast(source.name + ': нічого не знайшлось — спробуйте інше джерело'); return; }
         if (r.voices && r.voices.length) { voices = r.voices; if (!voice || voices.indexOf(voice) < 0) voice = r.voice || voices[0]; }
+        touch(item, deps.section);   // → «Продовжити перегляд» in its section
         const start = s ? (progress && progress.s === s && progress.e === e ? progress.pos || 0 : 0) : (progress ? progress.pos || 0 : 0);
         return deps.player.play({
           url: r.url,
@@ -206,7 +208,12 @@ export function createTitle(root, item, deps) {
       items: () => $$('.thead .btn', root),
       onFocus: layout,
       onEnter: (i) => {
-        if (i !== 0) { deps.toast('Мій список — скоро'); return; }
+        if (i !== 0) {
+          deps.toast(toggleFav(item, deps.section) ? 'Додано в «Моє»' : 'Прибрано з «Мого»');
+          draw();
+          deps.focus.focus('tbtn', 1);
+          return;
+        }
         if (isSeries()) play(progress ? progress.s : 1, progress ? progress.e : 1);
         else play(0, 0);
       },
