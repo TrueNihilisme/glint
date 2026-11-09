@@ -91,26 +91,52 @@ async function rowAB(press, send) {
   }
 }
 
-// GLINT_SELFTEST_MODE=play: open the first hero title, press Play, report what the player shows, go back.
-async function playFlow(press, send) {
+// GLINT_SELFTEST_MODE=play: open the first hero title, press Play, then try the player's panel: auto-hide,
+// a 10-s jump, scrubbing, the tracks the stream reports, subtitles if there are any; go back.
+async function playFlow(press, send, player) {
   const pick = () => ({
     title: (document.querySelector('#title h1') || {}).textContent || null,
     source: (document.querySelector('#title [data-zone="tsrc"] .chip') || {}).textContent || null,
     playing: document.body.classList.contains('playing'),
     msg: (document.querySelector('.p-msg') || {}).textContent || '',
-    time: (document.querySelector('.p-time') || {}).textContent || '',
-    sub: (document.querySelector('.p-sub') || {}).textContent || '',
     toast: (document.querySelector('.toast.on span') || {}).textContent || '',
-    avObject: !!document.querySelector('.p-av'),
   });
+  const st = () => player.state();
   press('enter');                       // hero → title page
   for (let i = 0; i < 20 && !/Джерело:/.test(pick().source || ''); i++) await wait(1000);
   send('play: title page', pick());
   press('enter');                       // Play
-  await wait(4000);
-  send('play: +4 s', pick());
-  await wait(8000);
-  send('play: +12 s', pick());
+  for (let i = 0; i < 20 && !(st() && st().dur > 0); i++) await wait(1000);
+  await wait(2000);
+  send('play: playing', Object.assign(pick(), { player: st() }));
+  await wait(4500);
+  send('play: panel hid by itself', { ui: st().ui });
+  const p0 = st().pos;
+  press('right');                       // panel hidden: +10 s
+  await wait(2500);
+  send('play: → with the panel hidden', { before: p0, after: st().pos, ui: st().ui });
+  press('up');                          // panel up, focus on the bar
+  const p1 = st().pos;
+  const fps = measure(3500);
+  for (let i = 0; i < 5; i++) { press('right'); await wait(250); }
+  const scrubbing = !!document.querySelector('.player.scrubbing');
+  const at = (document.querySelector('.p-at') || {}).textContent;
+  send('play: scrub ×5', Object.assign({ before: p1, scrubbing, at }, await fps));
+  await wait(1500);
+  send('play: after scrub', { pos: st().pos, ui: st().ui });
+  const s0 = st();
+  const k = s0.buttons.indexOf('subs');
+  if (k >= 0) {
+    press('down');
+    for (let i = 0; i < 6; i++) press('left');
+    for (let i = 0; i < k; i++) press('right');
+    press('enter');                     // the subtitle list
+    await wait(500);
+    const items = Array.prototype.slice.call(document.querySelectorAll('.p-item')).map((x) => x.textContent);
+    press('down'); press('enter');      // the first subtitle track
+    await wait(10000);
+    send('play: subtitles', { items, shown: (document.querySelector('.p-subs span') || {}).textContent || '' });
+  } else send('play: subtitles', { none: true });
   press('back');
   await wait(1500);
   press('back');
@@ -193,7 +219,8 @@ async function keyboardFlow(press, send) {
   press('back');
 }
 
-export async function selftest(url, press, mode) {
+export async function selftest(url, press, mode, hooks) {
+  if (mode === 'none') return;   // a test page drives the app itself
   const send = (step, res) => {
     try {
       const x = new XMLHttpRequest();
@@ -213,7 +240,7 @@ export async function selftest(url, press, mode) {
   });
   send('bg at start', ['bgA', 'bgB'].map((id) => document.getElementById(id).style.backgroundColor));
   await wait(4000);   // right after install/launch the TV is busy: numbers taken earlier were noise
-  if (mode === 'play') { await playFlow(press, send); send('done', { mem: mem() }); return; }
+  if (mode === 'play') { await playFlow(press, send, hooks.player); send('done', { mem: mem() }); return; }
   if (mode === 'color') { await colorProbe(send); send('done', { mem: mem() }); return; }
   if (mode === 'keyboard') { await keyboardFlow(press, send); send('done', { mem: mem() }); return; }
   send('idle', await measure(2000));

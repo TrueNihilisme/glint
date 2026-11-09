@@ -374,6 +374,8 @@ function press(a) {
   markKey();
   if (player.open) { player.key(a); return; }
   if (a === 'playpause') return;
+  if (a === 'rew') a = 'left';
+  else if (a === 'ff') a = 'right';
   if (a === 'enter') focus.enter();
   else if (a === 'back') {
     if (settingsOpen) settings.back();
@@ -406,5 +408,8 @@ loadExtensions().then(() => {
   drawMenu();
   const first = menuEntries()[0];
   if (first) openEntry(first.key);
-  if (GLINT_SELFTEST) setTimeout(() => selftest(GLINT_SELFTEST, press, GLINT_SELFTEST_MODE), 1500);
+  if (GLINT_SELFTEST) {
+    window.GlintPlayer = player;   // self-test builds only: lets a test page open the player directly
+    setTimeout(() => selftest(GLINT_SELFTEST, press, GLINT_SELFTEST_MODE, { player }), 1500);
+  }
 });

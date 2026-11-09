@@ -195,14 +195,45 @@ body.playing #tv > * { visibility: hidden; }
 body.playing #tv > .player, body.playing #tv > .toast { visibility: visible; }
 .p-screen, .p-av, .p-video { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
 .p-video { background: #000; }
-.p-ui { position: absolute; left: 0; bottom: 0; width: 1920px; height: 300px; opacity: 0; transition: opacity .3s ease;
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%); }
+.p-ui { position: absolute; left: 0; bottom: 0; width: 1920px; height: 460px; opacity: 0; transition: opacity .3s ease;
+  background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0) 100%); }
 .player.ui .p-ui { opacity: 1; }
-.p-title { position: absolute; left: 120px; bottom: 150px; font-size: 44px; font-weight: 700; }
-.p-sub { position: absolute; left: 122px; bottom: 112px; font-size: 24px; color: rgba(235,235,245,0.7); }
-.p-bar { position: absolute; left: 120px; right: 320px; bottom: 70px; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.25); }
-.p-bar i { display: block; width: 0; height: 8px; border-radius: 4px; background: #f5f5f7; }
-.p-time { position: absolute; right: 120px; bottom: 56px; width: 180px; text-align: right; font-size: 26px; color: rgba(235,235,245,0.85); }
+.p-title { position: absolute; left: 120px; bottom: 318px; font-size: 44px; font-weight: 700; }
+.p-sub { position: absolute; left: 122px; bottom: 280px; font-size: 24px; color: rgba(235,235,245,0.7); }
+/* progress: the fill scales and the thumb moves (transform only, no layout); the thumb shows when the bar has the focus */
+.p-bar { position: absolute; left: 120px; bottom: 196px; width: 1680px; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.25);
+}
+.p-fill { position: absolute; left: 0; top: 0; width: 1680px; height: 8px; border-radius: 4px; background: #f5f5f7;
+  -webkit-transform-origin: 0 0; transform-origin: 0 0; -webkit-transform: scaleX(0); transform: scaleX(0); }
+.p-thumb { position: absolute; left: -11px; top: -7px; width: 22px; height: 22px; border-radius: 11px; background: #fff; opacity: 0;
+  transition: opacity .2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.player.on-bar .p-thumb { opacity: 1; }
+.p-at { position: absolute; left: -60px; bottom: 34px; width: 142px; text-align: center; font-size: 28px; font-weight: 700; color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+.p-pos { position: absolute; left: 120px; bottom: 148px; font-size: 24px; color: rgba(235,235,245,0.85); }
+.p-left { position: absolute; right: 120px; bottom: 148px; font-size: 24px; color: rgba(235,235,245,0.85); }
+.player.scrubbing .p-pos { color: #fff; font-weight: 700; }
+/* buttons: transport in the middle, tracks / next episode on the right */
+.p-btns { position: absolute; left: 120px; bottom: 44px; width: 1680px; height: 80px; text-align: center; white-space: nowrap; }
+.p-btn { display: inline-block; width: 80px; height: 80px; line-height: 80px; margin: 0 10px; border-radius: 40px; vertical-align: top;
+  background: rgba(255,255,255,0.14); color: #f5f5f7; text-align: center; transition: transform .15s ease, background-color .15s ease, color .15s ease; }
+.p-btn svg { vertical-align: middle; }
+.p-btn.text { width: auto; padding: 0 34px; font-size: 26px; font-weight: 600; }
+.p-btn.right { position: relative; }
+.p-btn.focus { background: #f5f5f7; color: #111114; -webkit-transform: scale(1.1); transform: scale(1.1); }
+/* track list over the buttons */
+.p-list { display: none; position: absolute; right: 120px; bottom: 150px; min-width: 420px; padding: 18px 0; border-radius: 22px;
+  background: rgba(30,30,36,0.96); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.p-list.on { display: block; }
+.p-list-title { padding: 6px 30px 14px; font-size: 22px; color: rgba(235,235,245,0.6); }
+.p-item { height: 64px; line-height: 64px; padding: 0 30px; font-size: 28px; white-space: nowrap; }
+.p-item.focus { background: #f5f5f7; color: #111114; }
+/* subtitles drawn by the app (AVPlay hands over the text) */
+.p-subs { position: absolute; left: 0; bottom: 120px; width: 1920px; text-align: center; pointer-events: none; }
+.player.ui .p-subs { bottom: 490px; }
+.p-subs span { display: inline-block; max-width: 1500px; padding: 6px 18px; border-radius: 10px; font-size: 44px; line-height: 1.3;
+  color: #fff; background: rgba(0,0,0,0.55); white-space: pre-line; }
+.p-subs span:empty { display: none; }
 .p-msg { position: absolute; left: 0; top: 500px; width: 1920px; text-align: center; font-size: 30px; color: rgba(245,245,247,0.9); }
 
 /* drop-down under a menu tab (extension menus with several items) */

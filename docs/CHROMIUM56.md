@@ -125,3 +125,11 @@ below the hero the background is a colour taken from the focused card — a 92-p
 8×12 canvas, 2–5 ms on the TV (31 ms the first time). Reading pixels of a TMDB picture works with
 `crossOrigin = 'anonymous'` (TMDB sends `Access-Control-Allow-Origin: *`), and inside the widget it worked
 without it too.
+
+### Player panel (2026-11-09)
+
+Self-test on the TV (`GLINT_SELFTEST_MODE=play`, an HLS stream): the panel hides by itself after 4 s, → with the panel
+hidden jumps 10 s, five → on the bar scrub 10+10+10+30+30 s and the jump lands there; **56 fps** while scrubbing with the
+panel on screen (fill and thumb move by `transform` only). `getTotalTrackInfo()` on that stream: three VIDEO tracks
+(480p / 720p / 1080p, chosen adaptively), one AUDIO (`language` empty, 2 channels), no TEXT — so the audio and subtitle
+buttons only appear when a stream has something to choose.

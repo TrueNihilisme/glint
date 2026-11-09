@@ -2,8 +2,9 @@
 
 // keyCode → action. Tizen's remote sends Back as 10009; on a desktop Escape and Backspace stand in for it.
 export const KEY = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'enter', 10009: 'back', 27: 'back', 8: 'back',
-  // Tizen media keys (registered in registerMediaKeys): play/pause, play, pause, rewind, fast-forward, stop
-  10252: 'playpause', 415: 'playpause', 19: 'playpause', 412: 'left', 417: 'right', 413: 'back' };
+  // Tizen media keys (registered in registerMediaKeys): play/pause, play, pause, rewind, fast-forward, stop;
+  // rewind / fast-forward seek in the player and act as ← → everywhere else (main.js press)
+  10252: 'playpause', 415: 'playpause', 19: 'playpause', 412: 'rew', 417: 'ff', 413: 'back' };
 
 export const isTizen = typeof window.tizen !== 'undefined';
 

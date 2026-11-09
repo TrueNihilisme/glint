@@ -179,14 +179,28 @@ export function createTitle(root, item, deps) {
         if (r.voices && r.voices.length) { voices = r.voices; if (!voice || voices.indexOf(voice) < 0) voice = r.voice || voices[0]; }
         touch(item, deps.section);   // → «Продовжити перегляд» in its section
         const start = s ? (progress && progress.s === s && progress.e === e ? progress.pos || 0 : 0) : (progress ? progress.pos || 0 : 0);
+        const nx = s ? nextEpisode(s, e) : null;
         return deps.player.play({
           url: r.url,
           title: item.title,
           sub: (s ? 'Сезон ' + s + ', серія ' + e + ' · ' : '') + source.name + (voice ? ' · ' + voice : ''),
           start: start > 60000 ? start - 5000 : 0,
-        }).then((res) => remember(s, e, res));
+          next: nx ? (nx.s === s ? 'Серія ' + nx.e : 'Сезон ' + nx.s) : null,
+        }).then((res) => {
+          // «next episode» in the player: this one counts as watched and the next one starts
+          remember(s, e, res.next ? { pos: 1, dur: 1 } : res);
+          if (res.next && nx) play(nx.s, nx.e);
+        });
       })
       .catch((err) => { problem(source.name + ' play: ' + (err && err.message || err)); deps.toast(source.name + ': ' + (err && err.message || err)); });
+  }
+  function nextEpisode(s, e) {
+    const seasons = seriesSeasons();
+    const cur = seasons.find((x) => x.n === s);
+    const count = cur ? cur.count : (eps.length && season === s ? eps[eps.length - 1].n : 0);
+    if (e < count) return { s, e: e + 1 };
+    const later = seasons.filter((x) => x.n > s).sort((a, b) => a.n - b.n)[0];
+    return later ? { s: later.n, e: 1 } : null;
   }
   function remember(s, e, res) {
     const all = load('progress', {});
