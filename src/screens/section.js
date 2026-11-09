@@ -1,4 +1,4 @@
-import { rowHTML, scrollTrack } from '../ui/row.js';
+import { rowHTML, scrollTrack, loadPictures, styleOf, visibleCount } from '../ui/row.js';
 import { esc, $, $$, translateY } from '../ui/util.js';
 
 // A section of the top menu (Movies, Series, …): a hero at the top and rows below.
@@ -82,7 +82,10 @@ export function createSection(root, data, opts) {
       items: () => $$('.card', sec),
       onFocus: (i) => {
         const deep = scrollTo(id);
-        scrollTrack(sec, i, tracks[id], row.style);
+        scrollTrack(sec, i, tracks[id], styleOf(row));
+        // the row below comes into view next: start its first pictures now
+        const below = $('[data-zone="r' + (ri + 1) + '"]', page);
+        if (below) loadPictures(below, 0, visibleCount(styleOf(data.rows[ri + 1])) + 1);
         const it = row.items[i];
         opts.bg.set(deep || !heroes.length ? it.backdrop : heroes[hero].backdrop);
       },
@@ -92,5 +95,9 @@ export function createSection(root, data, opts) {
 
   drawHero();
   if (!heroes.length && data.rows[0] && data.rows[0].items[0]) opts.bg.set(data.rows[0].items[0].backdrop);
+  // first screen: the first two rows' visible cards, one row after another so decoding is spread out
+  data.rows.slice(0, 2).forEach((row, ri) => {
+    setTimeout(() => loadPictures($('[data-zone="r' + ri + '"]', page), 0, visibleCount(styleOf(row)) + 1), ri * 400);
+  });
   return { zones };
 }

@@ -74,11 +74,23 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .toast.on { opacity: 1; transform: translateY(0); }
 .toast span { display: inline-block; padding: 20px 34px; border-radius: 20px; background: rgba(28,28,32,0.95); font-size: 26px; }
 
-/* poster cards (248×372) and the «ШІ» chip for rows chosen by an AI */
+/* poster cards (248×372) */
 .card.poster { width: 248px; }
-.card.poster .thumb { width: 248px; height: 372px; background-size: 248px 372px; }
-.ai { display: inline-block; margin-left: 14px; padding: 0 10px; height: 30px; line-height: 30px; border-radius: 8px; vertical-align: 4px;
-  font-size: 17px; font-weight: 700; letter-spacing: 0.06em; color: #111114; background: #f5f5f7; }
+.card.poster .thumb { width: 248px; height: 372px; }
+
+/* picture: fades in over the dark placeholder once loaded */
+.pic { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 14px; background-size: cover; background-position: center;
+  opacity: 0; transition: opacity .3s ease; }
+.pic.ready { opacity: 1; }
+
+/* glass: a static rim and sheen over the picture (no backdrop-filter on Chromium 56, and nothing here animates
+   except opacity, so it costs no frames); a little brighter on the focused card */
+.thumb:after { content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 14px; opacity: 0.75;
+  -webkit-box-sizing: border-box; box-sizing: border-box; transition: opacity .25s ease;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.22), inset 0 1.5px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.25);
+  background: linear-gradient(160deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 26%, rgba(255,255,255,0) 48%, rgba(255,255,255,0) 78%, rgba(255,255,255,0.07) 100%); }
+.card.focus .thumb:after { opacity: 1; }
+
 .hero h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .pad-top { height: 200px; }
 .note { margin: 0 120px 36px; padding: 18px 26px; border-radius: 18px; background: rgba(255,255,255,0.08); font-size: 24px; color: rgba(235,235,245,0.8); }
